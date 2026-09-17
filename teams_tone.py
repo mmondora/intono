@@ -472,6 +472,10 @@ def tavola(sfondi: list[dict], out: Path) -> Path:
 # --------------------------------------------------------------------------- #
 
 COMPRESSIONE = 0.40      # quanto stringere lo spread di tinta rimappando
+CROMA_TARGET = 16.0      # croma C* CIELab dello sfondo generato (pastello)
+AMPIEZZA = 0.42          # ampiezza della banda di luminosita: contrasto basso
+CROMA_TARGET_PIENO = 30.0   # con --pieno: piu carico e piu contrastato
+AMPIEZZA_PIENO = 0.70
 PASSO_RUOTA = 45.0       # spaziatura del set di base sulla ruota dei colori
 TOLLERANZA_COPERTURA = 22.0   # sotto questa distanza la tinta e gia coperta
 
@@ -527,13 +531,16 @@ def _hsv_to_rgb(hsv: np.ndarray) -> np.ndarray:
 
 
 def genera(tinta_target: float, lum_maglietta: float, dest: Path,
-           sat_mul: float = 0.55) -> tuple[Path, bool]:
+           pieno: bool = False) -> tuple[Path, bool]:
     """Rimappa il master TeamSystem sulla tinta richiesta.
 
     La luminosita viene spinta finche lo stacco dalla maglietta supera la
     soglia: cosi il requisito e soddisfatto per costruzione, invece di essere
     verificato e poi bocciato come accade scegliendo tra sfondi esistenti.
     """
+    croma_target = CROMA_TARGET_PIENO if pieno else CROMA_TARGET
+    ampiezza = AMPIEZZA_PIENO if pieno else AMPIEZZA
+
     mp = master_path()
     if not mp.is_file():
         raise SystemExit(f"immagine di base non trovata: {mp}\n"
@@ -546,35 +553,53 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
 
     nh = np.mod(tinta_target / 360.0
                 + (h0 - master_tinta() / 360.0) * COMPRESSIONE, 1.0)
-    ns = np.clip(s0 * sat_mul, 0, 1)
+    # Comprimo il RANGE di luminosita in una banda stretta, invece di limitarmi
+    # a un gamma. Il gamma sposta i mezzitoni ma lascia dov'e la macchia di luce
+    # del master, che resta quasi bianca: e da li che viene la sensazione di
+    # immagine "sparata". Normalizzando e rimappando in una banda si tolgono sia
+    # il bianco bruciato sia il nero chiuso, che con poca croma e quello che
+    # rende un colore pastello.
+    vmin, vmax = float(v0.min()), float(v0.max())
+    v_norm = (v0 - vmin) / max(vmax - vmin, 1e-6)
 
-    # Punto a una LUMINANZA bersaglio, non a una V: Rec.709 pesa il verde 0.71,
-    # quindi la stessa V resa su una tinta giallo-verde da un lime acido e su un
-    # blu un blu notte. Normalizzando sulla luminanza il risultato e coerente a
-    # qualunque tinta, e lo stacco dalla maglietta e garantito.
     scuro = lum_maglietta > 0.5
     target = lum_maglietta + (-LUM_TARGET_DELTA if scuro else LUM_TARGET_DELTA)
     target = float(np.clip(target, LUM_BANDA[0], LUM_BANDA[1]))
 
-    def rendi(gamma: float, arr_v: np.ndarray, arr_h: np.ndarray,
-              arr_s: np.ndarray) -> np.ndarray:
-        nv = np.clip(np.power(arr_v, gamma), 0, 1)
-        return np.clip(_hsv_to_rgb(np.stack([arr_h, arr_s, nv], axis=-1)), 0, 1)
+    def rendi(centro: float, sat_mul: float, arr_v: np.ndarray,
+              arr_h: np.ndarray, arr_s: np.ndarray) -> np.ndarray:
+        nv = np.clip(centro - ampiezza / 2.0 + arr_v * ampiezza, 0.04, 0.96)
+        ns = np.clip(arr_s * sat_mul, 0, 1)
+        return np.clip(_hsv_to_rgb(np.stack([arr_h, ns, nv], axis=-1)), 0, 1)
 
-    # bisezione del gamma su una copia ridotta: la luminanza decresce in modo
-    # monotono al crescere del gamma, quindi bastano poche iterazioni
-    sh, ss, sv = (x[::6, ::6] for x in (nh, ns, v0))
-    lo, hi = 0.35, 4.0
-    for _ in range(14):
-        mid = (lo + hi) / 2.0
-        lum = float(np.median(rendi(mid, sv, sh, ss) @ REC709))
-        if lum > target:
-            lo = mid
-        else:
-            hi = mid
-    gamma = (lo + hi) / 2.0
+    # Due bisezioni alternate su una copia ridotta. Sulla CROMA, non sulla
+    # saturazione HSV: a pari saturazione un magenta ha croma percepita molto
+    # piu alta di un oliva, quindi un moltiplicatore fisso rende "pastello" solo
+    # alcune tinte e sgargianti le altre. Sulla LUMINANZA per lo stacco.
+    sh, ss, sv = (x[::6, ::6] for x in (nh, s0, v_norm))
+    sat_mul, centro = 0.5, 0.5
+    for _ in range(3):
+        lo, hi = 0.02, 1.0
+        for _ in range(12):
+            mid = (lo + hi) / 2.0
+            c = float(np.median(_croma_lab(
+                (rendi(centro, mid, sv, sh, ss) * 255).astype(np.uint8))))
+            if c < croma_target:
+                lo = mid
+            else:
+                hi = mid
+        sat_mul = (lo + hi) / 2.0
 
-    rgb = rendi(gamma, v0, nh, ns)
+        lo, hi = 0.10, 0.95
+        for _ in range(12):
+            mid = (lo + hi) / 2.0
+            if float(np.median(rendi(mid, sat_mul, sv, sh, ss) @ REC709)) < target:
+                lo = mid
+            else:
+                hi = mid
+        centro = (lo + hi) / 2.0
+
+    rgb = rendi(centro, sat_mul, v_norm, nh, s0)
     out_img = (rgb * 255).round().astype(np.uint8)
     lum_finale = float(np.median(rgb[270:918, 384:1536] @ REC709))
 
@@ -584,7 +609,8 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     # nome deterministico su bucket di 5°: rilanciare con la stessa maglietta
     # riusa lo stesso file invece di riempire la gallery
     bucket = int(round(tinta_target / 5.0)) * 5 % 360
-    uid = uuid.uuid5(NS, f"teams-tone/gen/{bucket}/{'d' if scuro else 'l'}")
+    uid = uuid.uuid5(NS, f"teams-tone/gen/{bucket}/{'d' if scuro else 'l'}"
+                         f"/{'pieno' if pieno else 'pastello'}")
     ext = ".png"
     main = dest / f"{uid}{ext}"
     gia = main.is_file()
@@ -633,7 +659,8 @@ MAGLIETTE_COMUNI = [
 ]
 
 
-def init_set(dest: Path, passo: float = PASSO_RUOTA) -> list[Path]:
+def init_set(dest: Path, passo: float = PASSO_RUOTA,
+             pieno: bool = False) -> list[Path]:
     """Genera il set di base, ma SOLO le tinte che non sono gia coperte.
 
     Generare un set completo a ogni installazione raddoppierebbe una gallery
@@ -660,7 +687,7 @@ def init_set(dest: Path, passo: float = PASSO_RUOTA) -> list[Path]:
             continue
         # luminanza di riferimento 0.5: il set di base non e legato a una
         # maglietta specifica, la scelta fine la fa la regola al momento dell'uso
-        path, riusato = genera(t, 0.5, dest)
+        path, riusato = genera(t, 0.5, dest, pieno=pieno)
         hue_esistenti.append(misura_sfondo(path)["tinta"])
         fatti.append(path)
         print(f"  {t:5.0f}°  {'aggiornata' if riusato else 'generata'}: {path.name}")
@@ -807,6 +834,8 @@ def main() -> None:
                     help="pagina HTML: quale sfondo con quale maglietta")
     ap.add_argument("--master", metavar="FOTO",
                     help="imposta l'immagine di base da cui generare")
+    ap.add_argument("--pieno", action="store_true",
+                    help="resa piu carica e contrastata invece che pastello")
     ap.add_argument("--dai-miei", action="store_true", dest="dai_miei",
                     help="scegli tra gli sfondi che hai gia, invece di generarne uno")
     ap.add_argument("--top", type=int, default=5, help="quante alternative mostrare (con --dai-miei)")
@@ -828,7 +857,7 @@ def main() -> None:
     dest = cartella_teams(args.teams_dir)
 
     if args.init:
-        fatti = init_set(dest)
+        fatti = init_set(dest, pieno=args.pieno)
         out = pagina(dest, Path.home() / ".cache/teams-tone/sfondi.html")
         print(f"\n  {len(fatti)} sfondi generati. Pagina: {out}")
         print("  Riavvia Teams per vedere i nuovi sfondi.\n")
@@ -883,7 +912,7 @@ def main() -> None:
         etichetta = {"contrasto": "colore opposto", "tono": "armonia morbida",
                      "neutro": "maglietta senza tinta, resto sul brand"}[eff]
         print(f"  {etichetta}: genero a {tinta_target:.0f}°")
-        path, riusato = genera(tinta_target, mag["lum"], dest)
+        path, riusato = genera(tinta_target, mag["lum"], dest, pieno=args.pieno)
         scelto = {"path": str(path), "nome": path.stem[:8], **misura_sfondo(path)}
         generato = True
         if riusato:
