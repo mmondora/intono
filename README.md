@@ -62,6 +62,7 @@ On first run macOS asks for camera access. Grant it to your terminal, or to the
 | `teams-tone --sheet` | numbered contact sheet of every background you have |
 | `teams-tone --aggiungi FILE` | add an image to the Teams gallery |
 | `teams-tone --image FILE` | use a photo instead of the webcam |
+| `teams-tone --versione` | which installed version you are running |
 
 ## The rule
 
@@ -150,6 +151,15 @@ neutral generated gradient, there so the tool runs before you configure
 anything. Point `--master` at your own image; its hue is measured, not declared
 — being asked to state it was an invitation to get it wrong, and a wrong value
 shifts every generated colour by that error while looking like a bug in the rule.
+
+## Versioning
+
+`VERSIONE` at the top of `teams_tone.py` is the single source; `install.sh`
+reads it from there and records it in `~/.local/share/teams-tone/VERSION`, so the
+installed copy and the source cannot drift apart silently. Re-running
+`install.sh` reports what it replaced. `teams-tone --versione` says which copy
+you are actually running — worth knowing, because the command runs the installed
+snapshot, not the file in your working tree. See `CHANGELOG.md`.
 
 ## Licence
 

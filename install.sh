@@ -26,6 +26,12 @@ ok "python3 $(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
 
 [[ -e "$SRC/teams_tone.py" ]] || { warn "manca teams_tone.py: sei nella cartella giusta?"; exit 1; }
 
+# La versione sta solo in teams_tone.py: qui viene letta, non duplicata, cosi
+# non possono divergere. Bump di VERSIONE a ogni cambiamento.
+VER="$(sed -n 's/^VERSIONE = "\(.*\)".*/\1/p' "$SRC/teams_tone.py" | head -1)"
+[[ -n "$VER" ]] || VER="sconosciuta"
+PREC="$(cat "$APP/VERSION" 2>/dev/null || true)"
+
 # L'immagine di base: la tua se c'e, altrimenti l'esempio neutro del repo.
 MASTER=""
 [[ -e "$SRC/master.png" ]] && MASTER="$SRC/master.png"
@@ -35,6 +41,14 @@ MASTER=""
 mkdir -p "$APP" "$BIN"
 cp "$SRC/teams_tone.py" "$APP/"
 cp "$MASTER" "$APP/master.png"
+printf '%s\n' "$VER" > "$APP/VERSION"
+if [[ -n "$PREC" && "$PREC" != "$VER" ]]; then
+  ok "teams-tone $VER  (aggiornato da $PREC)"
+elif [[ -n "$PREC" ]]; then
+  ok "teams-tone $VER  (era gia questa versione: reinstallata)"
+else
+  ok "teams-tone $VER"
+fi
 ok "copiato in $APP"
 [[ "$MASTER" == *examples* ]] && warn "uso l'immagine di base di esempio; imposta la tua con: teams-tone --master TUA.png"
 
@@ -66,5 +80,5 @@ if [[ ":$PATH:" != *":$BIN:"* ]]; then
   warn "aggiungi una volta sola questa riga, poi riapri il Terminale:"
   printf '  echo '"'"'export PATH="$HOME/.local/bin:$PATH"'"'"' >> ~/.zshrc\n\n'
 fi
-ok "fatto. Prova:  teams-tone"
+ok "fatto. Prova:  teams-tone        (versione: teams-tone --versione)"
 echo

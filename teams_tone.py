@@ -21,6 +21,8 @@ Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
 
 from __future__ import annotations
 
+VERSIONE = "0.7.0"   # unica fonte: install.sh la legge da qui
+
 import argparse
 import hashlib
 import json
@@ -865,6 +867,8 @@ def main() -> None:
                     help="pagina HTML: quale sfondo con quale maglietta")
     ap.add_argument("--master", metavar="FOTO",
                     help="imposta l'immagine di base da cui generare")
+    ap.add_argument("--versione", action="version",
+                    version=f"teams-tone {VERSIONE}")
     ap.add_argument("--out", metavar="DIR",
                     help="cartella dove depositare la copia riusabile")
     ap.add_argument("--pieno", action="store_true",
