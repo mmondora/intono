@@ -1,4 +1,4 @@
-# teams-tone
+# intono
 
 Guarda la maglietta dalla webcam e ti dice quale sfondo usare, applicando una
 regola di armonia dichiarata alla tua immagine di base.
@@ -26,11 +26,11 @@ dice quale posizione cliccare, mostrando il perché.
 1. Nel Finder: click destro sulla cartella → **Servizi → Nuovo Terminale nella
    cartella**.
 2. `bash install.sh`
-3. `teams-tone` — la prima volta macOS chiede la Camera: concedila.
+3. `intono` — la prima volta macOS chiede la Camera: concedila.
 
 `install.sh` va rilanciato **a ogni cambiamento del codice**: il comando
-`teams-tone` esegue una copia installata, non il file nel progetto. Ti dice
-quale versione sta sostituendo, e `teams-tone --versione` dice quale stai
+`intono` esegue una copia installata, non il file nel progetto. Ti dice
+quale versione sta sostituendo, e `intono --versione` dice quale stai
 eseguendo.
 
 ## Setup della griglia macOS — una volta sola
@@ -39,9 +39,9 @@ eseguendo.
 insieme.
 
 ```
-teams-tone --master ~/percorso/tuo-sfondo.png
-teams-tone --init       # genera gli 8 in ~/Pictures/teams-tone/
-teams-tone --griglia    # l'ordine in cui importarli
+intono --master ~/percorso/tuo-sfondo.png
+intono --init       # genera gli 8 in ~/Pictures/intono/
+intono --griglia    # l'ordine in cui importarli
 ```
 
 Poi importali **in quell'ordine** in Centro di Controllo → effetti video →
@@ -52,7 +52,7 @@ ordinata per tinta, ed è questo che trasforma "cerca la miniatura giusta" in
 Da lì in avanti:
 
 ```
-teams-tone
+intono
 ```
 
 ```
@@ -62,7 +62,7 @@ teams-tone
   griglia macOS: posizione 4 di 8   (tinta 185°, 2° dall'ideale)
 ```
 
-E `teams-tone --pagina` ti fa il promemoria: un file HTML unico, con in testa
+E `intono --pagina` ti fa il promemoria: un file HTML unico, con in testa
 il set numerato per controllare l'ordine di importazione, e una riga per ogni
 colore di maglietta con la posizione da cliccare in armonia morbida e in
 contrasto. Miniature incorporate, funziona offline, lo mandi a un collega senza
@@ -71,7 +71,7 @@ allegare cartelle.
 Non genera niente, quindi risponde subito. Lo scarto dall'ideale resta sotto i
 22°, metà del passo di 45°: dentro la tolleranza dell'armonia.
 
-Il set vive solo in `~/Pictures/teams-tone/` e **non** viene installato anche in
+Il set vive solo in `~/Pictures/intono/` e **non** viene installato anche in
 Teams: otto miniature in più in quella griglia sono esattamente l'ingombro che
 il tool cerca di evitare. Con `--anche-teams` lo fa comunque.
 
@@ -84,7 +84,7 @@ parti quella voce non compare.
 Per una webcam USB, un Mac Intel, o quando vuoi uno sfondo solo dentro Teams:
 
 ```
-teams-tone --genera
+intono --genera
 ```
 
 Rimappa la tua immagine sulla tinta esatta, la installa nella cartella degli
@@ -92,28 +92,28 @@ sfondi di Teams con la coppia `<uuid>.png` + `<uuid>_thumb.png` che Teams
 pretende, e apre il file così lo riconosci nella griglia. È anche quello che
 succede da solo se il set degli 8 non esiste ancora.
 
-Ogni immagine generata finisce anche in `~/Pictures/teams-tone/` con un nome
+Ogni immagine generata finisce anche in `~/Pictures/intono/` con un nome
 leggibile, perché dentro il container di Teams ha un nome UUID e non la
-raggiunge nessun altro programma. `teams-tone --out CARTELLA` sposta la
+raggiunge nessun altro programma. `intono --out CARTELLA` sposta la
 destinazione.
 
 ## Gli altri comandi
 
 ```
-teams-tone --mode tono        armonia morbida (salmone → verde oliva)
-teams-tone --mode contrasto   colore opposto  (salmone → teal)
-teams-tone --pieno            resa più carica invece che pastello
-teams-tone --pagina           pagina HTML: quale sfondo con quale maglietta
-teams-tone --sheet            tavola numerata dei tuoi sfondi Teams
-teams-tone --dai-miei         scegli tra gli sfondi già in gallery Teams
-teams-tone --aggiungi FILE    aggiungi un'immagine alla gallery Teams
-teams-tone --image FOTO       usa una foto invece della webcam (per provare)
-teams-tone --versione         quale versione stai eseguendo
+intono --mode tono        armonia morbida (salmone → verde oliva)
+intono --mode contrasto   colore opposto  (salmone → teal)
+intono --pieno            resa più carica invece che pastello
+intono --pagina           pagina HTML: quale sfondo con quale maglietta
+intono --sheet            tavola numerata dei tuoi sfondi Teams
+intono --dai-miei         scegli tra gli sfondi già in gallery Teams
+intono --aggiungi FILE    aggiungi un'immagine alla gallery Teams
+intono --image FOTO       usa una foto invece della webcam (per provare)
+intono --versione         quale versione stai eseguendo
 ```
 
 ## L'immagine di partenza
 
-`teams-tone --master ~/Desktop/tua.png`. La tinta la **misura da sola**, non
+`intono --master ~/Desktop/tua.png`. La tinta la **misura da sola**, non
 devi dichiararla: chiedertela era un invito a sbagliare, e un valore sbagliato
 sposta ogni colore generato di quella differenza facendo sembrare difettosa la
 regola.
@@ -124,7 +124,7 @@ versionato.
 
 ## Le regole, in chiaro
 
-Sono le costanti in testa a `teams_tone.py`:
+Sono le costanti in testa a `intono.py`:
 
 - mai uno sfondo a meno di **25°** dalla maglietta: ti mimetizzi
 - armonia morbida = **70°** di distanza; contrasto = **175°**
@@ -140,11 +140,11 @@ Sono le costanti in testa a `teams_tone.py`:
 ## Pulire
 
 ```
-teams-tone --delete
+intono --delete
 ```
 
 Cancella dalla cartella di uscita **solo i file che il tool ha creato**
-(`teams-tone-*.png` e `sfondo-attuale.png`), elencandoli prima e chiedendo
+(`intono-*.png` e `sfondo-attuale.png`), elencandoli prima e chiedendo
 conferma. Il filtro è sui nomi e non su tutta la cartella, perché in Pictures ci
 sono anche le tue foto. `--si` salta la conferma.
 

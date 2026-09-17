@@ -1,11 +1,41 @@
 # Changelog
 
-La versione sta in `VERSIONE`, in testa a `teams_tone.py`. `install.sh` la legge
-da lì e la scrive in `~/.local/share/teams-tone/VERSION`, così l'installato e il
-sorgente non possono divergere in silenzio. `teams-tone --versione` dice quale
+La versione sta in `VERSIONE`, in testa a `intono.py`. `install.sh` la legge
+da lì e la scrive in `~/.local/share/intono/VERSION`, così l'installato e il
+sorgente non possono divergere in silenzio. `intono --versione` dice quale
 copia stai eseguendo.
 
 Da alzare a ogni cambiamento che tocchi il comportamento.
+
+## 1.0.1
+
+- `griglia()` leggeva la tinta dal nome del file spezzandolo sui trattini e
+  prendendo il campo per indice. Rinominando il tool i pezzi sono passati da
+  cinque (`teams-tone-set-035-pastello`) a quattro (`intono-set-035-pastello`),
+  quindi leggeva il campo sbagliato e il set risultava **sempre vuoto**: niente
+  posizioni, `--pagina` che ricadeva su Teams. Ora e una regex sul nome del
+  programma, che non dipende da quanti trattini contiene.
+- `--pagina` senza set e senza Teams installato diceva "apri Teams almeno una
+  volta" invece della cosa vera: ora dice di generare il set.
+
+## 1.0.0
+
+- **Rinominato `intono`.** Il tool non scrive piu in Teams per default e lo
+  sfondo vale per tutte le app: il vecchio nome diceva il vendor sbagliato.
+  Cambiano comando, file, `~/.local/share/`, `~/.config/`, `~/.cache/`, la
+  cartella di uscita `~/Pictures/intono/` e il prefisso dei file generati. I
+  semi `uuid5` restano invariati: cambiarli orfanerebbe i file gia installati
+  in Teams da chi aggiorna, e sono identificatori interni che nessuno legge.
+  `install.sh` segnala la vecchia installazione e dice come rimuoverla.
+- **Niente piu scrittura in Teams per default.** La copia utile e quella in
+  `~/Pictures/intono/`, da importare nella griglia di macOS. `--anche-teams`
+  ripristina l'installazione nella gallery di Teams, per webcam USB, Mac Intel
+  o sfondi solo dentro Teams.
+- **La cartella di Teams non e piu un prerequisito.** Prima il tool si
+  rifiutava di partire se non la trovava, anche per generare uno sfondo che in
+  Teams non finiva: ora si risolve solo nei comandi che la usano davvero
+  (`--anche-teams`, `--dai-miei`, `--aggiungi`, `--sheet`). Verificato su una
+  macchina senza Teams installato.
 
 ## 0.9.0
 
@@ -15,7 +45,7 @@ Da alzare a ogni cambiamento che tocchi il comportamento.
   l'ordine di importazione corrisponda. Senza set ricade sulla gallery di Teams
   e lo dice.
 - `--delete` cancella dalla cartella di uscita solo i file che il tool ha creato
-  (`teams-tone-*.png`, `sfondo-attuale.png`), elencandoli e chiedendo conferma.
+  (`intono-*.png`, `sfondo-attuale.png`), elencandoli e chiedendo conferma.
   Il filtro e sui nomi e non su tutta la cartella: in Pictures ci sono le foto
   di qualcuno. `--si` salta la conferma; senza terminale interattivo si ferma e
   lo dice invece di procedere.
@@ -29,7 +59,7 @@ Da alzare a ogni cambiamento che tocchi il comportamento.
   set per la griglia di macOS: due collezioni diverse. Saltava i settori "gia
   coperti" da immagini che nella griglia non ci sono, e produceva un set
   incompleto — tre sfondi invece di otto. Ora la copertura si misura sul set.
-- Il set canonico ha un prefisso proprio (`teams-tone-set-NNN-...`), cosi le
+- Il set canonico ha un prefisso proprio (`intono-set-NNN-...`), cosi le
   generazioni ad-hoc per una maglietta specifica non finiscono nella griglia e
   non spostano le posizioni.
 - `--init` non installa piu il set anche nella gallery di Teams: serve alla
@@ -66,8 +96,8 @@ Da alzare a ogni cambiamento che tocchi il comportamento.
 
 ## 0.6.0
 
-- Copia riusabile fuori dalla cartella di Teams, in `~/Pictures/teams-tone/`,
-  con nome parlante (`teams-tone-080-pastello.png`: tinta e resa). Dentro il
+- Copia riusabile fuori dalla cartella di Teams, in `~/Pictures/intono/`,
+  con nome parlante (`intono-080-pastello.png`: tinta e resa). Dentro il
   container di Teams il file ha un nome UUID e non lo raggiunge nessun altro
   programma. `--out CARTELLA` sposta la destinazione.
 

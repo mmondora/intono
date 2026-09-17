@@ -1,4 +1,6 @@
-# teams-tone
+# intono
+
+*"in tono"* — in keeping, in tune.
 
 Looks at the shirt you are actually wearing and tells you which video-call
 background goes with it — from a stated colour-harmony rule, using your own base
@@ -7,7 +9,7 @@ image, in one click.
 No cloud, no network calls, no Teams API. The frame never leaves your machine.
 
 ```
-$ teams-tone
+$ intono
 
   volto trovato, guardo il busto sotto
   maglietta: tinta 8°  intensita 0.50  luminosita 0.52
@@ -43,21 +45,21 @@ This is the recommended path: the background is replaced at the camera layer, so
 one choice covers Teams, Zoom, Meet and anything else simultaneously.
 
 ```bash
-git clone https://github.com/mmondora/teams-tone.git
-cd teams-tone
+git clone https://github.com/mmondora/intono.git
+cd intono
 bash install.sh
-teams-tone --master path/to/your-background.png   # your own base image
-teams-tone --init                                 # generate eight hues
-teams-tone --griglia                              # the order to import them in
+intono --master path/to/your-background.png   # your own base image
+intono --init                                 # generate eight hues
+intono --griglia                              # the order to import them in
 ```
 
 `--griglia` prints the set:
 
 ```
-   1.  tinta  35°   teams-tone-set-035-pastello.png
-   2.  tinta  80°   teams-tone-set-080-pastello.png
-   3.  tinta 125°   teams-tone-set-125-pastello.png
-   4.  tinta 170°   teams-tone-set-170-pastello.png
+   1.  tinta  35°   intono-set-035-pastello.png
+   2.  tinta  80°   intono-set-080-pastello.png
+   3.  tinta 125°   intono-set-125-pastello.png
+   4.  tinta 170°   intono-set-170-pastello.png
    ...
 ```
 
@@ -67,8 +69,8 @@ grid hue-ordered, which is what turns "find the right thumbnail" into "click
 slot 4". From then on:
 
 ```bash
-teams-tone          # → griglia macOS: posizione 4 di 8
-teams-tone --pagina # a cheat-sheet: shirt colour → slot, as one HTML file
+intono          # → griglia macOS: posizione 4 di 8
+intono --pagina # a cheat-sheet: shirt colour → slot, as one HTML file
 ```
 
 `--pagina` writes a single self-contained HTML file — thumbnails embedded, works
@@ -87,61 +89,61 @@ USB webcams do not get the feature at all.
 ## The other path — the Teams gallery
 
 For a USB webcam, an Intel Mac, or when you want a background only inside Teams,
-the tool writes directly into the Teams custom-background folder. This is what
-happens automatically when no grid set exists yet, or on `--genera`:
+`--anche-teams` also writes into the Teams custom-background folder:
 
 ```bash
-teams-tone --genera
+intono --genera --anche-teams
 ```
 
 It remaps your base image to the exact hue, installs it with the `<uuid>.png` +
 `<uuid>_thumb.png` pair Teams requires, and opens the file so you can find it in
-the gallery. Names are deterministic `uuid5` per hue bucket, so re-running
+the gallery. Without that flag nothing is written to Teams at all, and Teams does
+not even need to be installed. Names are deterministic `uuid5` per hue bucket, so re-running
 overwrites instead of accumulating, and an image already there is detected by
 hash and never duplicated. Cleanup only touches entries this tool created.
 
-Every generated image is also copied to `~/Pictures/teams-tone/` under a name
+Every generated image is also copied to `~/Pictures/intono/` under a name
 that says what it is, plus a fixed `sfondo-attuale.png` — because inside the
 Teams container a background is a UUID in a hidden folder that no other
 application can reasonably use. `--out DIR` moves that folder.
 
 ## Install
 
-`install.sh` creates an isolated virtualenv under `~/.local/share/teams-tone`,
-installs `numpy`, `pillow` and `opencv-python` there, and puts a `teams-tone`
+`install.sh` creates an isolated virtualenv under `~/.local/share/intono`,
+installs `numpy`, `pillow` and `opencv-python` there, and puts a `intono`
 command in `~/.local/bin`. Nothing goes into the system Python.
 `bash install.sh --uninstall` removes all of it.
 
 On first run macOS asks for camera access. Grant it to your terminal, or to the
-`Teams Tone.command` launcher the installer drops on your Desktop.
+`Intono.command` launcher the installer drops on your Desktop.
 
-Re-run `install.sh` after every change: the `teams-tone` command runs the
+Re-run `install.sh` after every change: the `intono` command runs the
 installed snapshot, not the file in your working tree. It reports what it
-replaced, and `teams-tone --versione` says which copy you are running.
+replaced, and `intono --versione` says which copy you are running.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `teams-tone` | look at the shirt, name the grid slot to click |
-| `teams-tone --init` | generate the eight-hue set (only the hues you lack) |
-| `teams-tone --griglia` | list the set in the order to import it into macOS |
-| `teams-tone --genera` | generate a fresh exact-hue background instead |
-| `teams-tone --master FILE` | set the base image everything is derived from |
-| `teams-tone --mode tono\|contrasto` | force soft harmony or complementary |
-| `teams-tone --pieno` | punchier rendering instead of the pastel default |
-| `teams-tone --out DIR` | where to keep the reusable copies |
-| `teams-tone --dai-miei` | pick among backgrounds already in the Teams gallery |
-| `teams-tone --pagina` | single-file HTML page: which slot for which shirt |
-| `teams-tone --delete` | remove the backgrounds the tool created in Pictures |
-| `teams-tone --sheet` | numbered contact sheet of your Teams backgrounds |
-| `teams-tone --aggiungi FILE` | add an image to the Teams gallery |
-| `teams-tone --image FILE` | use a photo instead of the webcam |
-| `teams-tone --versione` | which installed version you are running |
+| `intono` | look at the shirt, name the grid slot to click |
+| `intono --init` | generate the eight-hue set (only the hues you lack) |
+| `intono --griglia` | list the set in the order to import it into macOS |
+| `intono --genera` | generate a fresh exact-hue background instead |
+| `intono --master FILE` | set the base image everything is derived from |
+| `intono --mode tono\|contrasto` | force soft harmony or complementary |
+| `intono --pieno` | punchier rendering instead of the pastel default |
+| `intono --out DIR` | where to keep the reusable copies |
+| `intono --dai-miei` | pick among backgrounds already in the Teams gallery |
+| `intono --pagina` | single-file HTML page: which slot for which shirt |
+| `intono --delete` | remove the backgrounds the tool created in Pictures |
+| `intono --sheet` | numbered contact sheet of your Teams backgrounds |
+| `intono --aggiungi FILE` | add an image to the Teams gallery |
+| `intono --image FILE` | use a photo instead of the webcam |
+| `intono --versione` | which installed version you are running |
 
 ## The rule
 
-Every threshold is a named constant at the top of `teams_tone.py`.
+Every threshold is a named constant at the top of `intono.py`.
 
 - **Never within 25°** of the shirt's hue — you blend into your own background.
 - **Soft harmony** targets 70° of hue distance; **contrast** targets 175°.
@@ -205,8 +207,8 @@ shifts every generated colour by that error while looking like a bug in the rule
 
 ## Versioning
 
-`VERSIONE` at the top of `teams_tone.py` is the single source; `install.sh` reads
-it from there and records it in `~/.local/share/teams-tone/VERSION`, so the
+`VERSIONE` at the top of `intono.py` is the single source; `install.sh` reads
+it from there and records it in `~/.local/share/intono/VERSION`, so the
 installed copy and the source cannot drift apart silently. See `CHANGELOG.md`.
 
 ## Platforms

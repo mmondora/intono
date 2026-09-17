@@ -1,30 +1,32 @@
 #!/usr/bin/env python3
 """
-teams-tone - genera lo sfondo Teams in armonia con la maglietta che hai addosso.
+intono - genera lo sfondo Teams in armonia con la maglietta che hai addosso.
 
 Uno scatto dalla webcam, legge il colore della maglietta, rimappa la tua
 immagine di base sulla tinta giusta e mette lo sfondo in gallery. Il nome del
 file e deterministico per fascia di tinta: la stessa maglietta riusa lo stesso
 sfondo invece di accumularne.
 
-    teams-tone                    genera lo sfondo per questa maglietta
-    teams-tone --mode tono        armonia morbida (salmone -> verde oliva)
-    teams-tone --mode contrasto   colore opposto (salmone -> teal)
-    teams-tone --dai-miei         scegli tra gli sfondi che hai gia, non generare
-    teams-tone --master FOTO      imposta l'immagine di base
-    teams-tone --init             completa il set di base sulla ruota dei colori
-    teams-tone --pagina           pagina HTML: quale sfondo con quale maglietta
-    teams-tone --image FOTO       usa una foto invece della webcam (per provare)
+    intono                    genera lo sfondo per questa maglietta
+    intono --mode tono        armonia morbida (salmone -> verde oliva)
+    intono --mode contrasto   colore opposto (salmone -> teal)
+    intono --dai-miei         scegli tra gli sfondi che hai gia, non generare
+    intono --master FOTO      imposta l'immagine di base
+    intono --init             completa il set di base sulla ruota dei colori
+    intono --pagina           pagina HTML: quale sfondo con quale maglietta
+    intono --image FOTO       usa una foto invece della webcam (per provare)
 
 Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
 """
 
 from __future__ import annotations
 
-VERSIONE = "0.9.0"   # unica fonte: install.sh la legge da qui
+VERSIONE = "1.0.1"   # unica fonte: install.sh la legge da qui
+NOME = "intono"      # usato nei nomi dei file generati
 
 import argparse
 import hashlib
+import re
 import json
 import os
 import platform
@@ -64,18 +66,22 @@ FINESTRA_TINTA = 25.0
 THUMB = (280, 158)
 IMG_EXT = (".png", ".jpg", ".jpeg", ".bmp")
 NS = uuid.UUID("6f2d1b8e-4c3a-5f77-9b21-0ad3f5c81e42")
+# I semi uuid5 restano "teams-tone/...": cambiarli cambierebbe i nomi dei file
+# installati in Teams, e la pulizia cerca gli uuid correnti — quelli vecchi
+# resterebbero orfani e invisibili nella gallery di chi aggiorna. E uno
+# identificatore interno, non un nome che qualcuno legge.
 
 CARTELLE_TEAMS = [
     Path.home() / "Library/Containers/com.microsoft.teams2/Data/Library"
                   "/Application Support/Microsoft/MSTeams/Backgrounds/Uploads",
     Path.home() / "Library/Application Support/Microsoft/Teams/Backgrounds/Uploads",
 ]
-CACHE = Path.home() / ".cache/teams-tone/misure.json"
+CACHE = Path.home() / ".cache/intono/misure.json"
 # Versione dello schema di misura: entra nella chiave di cache, cosi cambiare
 # le metriche invalida le voci vecchie invece di leggerne i campi mancanti
 # come zero, che disattiverebbe una penalita senza dirlo.
 MISURA_V = 3
-CONFIG = Path.home() / ".config/teams-tone/config.json"
+CONFIG = Path.home() / ".config/intono/config.json"
 
 
 def carica_config() -> dict:
@@ -448,12 +454,17 @@ def griglia(pieno: bool = False) -> list[dict]:
     nome, e ordinato per tinta, quindi la posizione e calcolabile.
     """
     suffisso = "pieno" if pieno else "pastello"
+    # Regex e non split posizionale: leggere la tinta per indice dipende da
+    # quanti trattini ha il nome del programma, e rinominando il tool da
+    # teams-tone a intono i pezzi sono passati da cinque a quattro — il parser
+    # leggeva il campo sbagliato e il set risultava sempre vuoto.
+    rx = re.compile(rf"^{re.escape(NOME)}-set-(\d+)-{suffisso}$")
     out = []
-    for f in sorted(cartella_uscita().glob(f"teams-tone-set-*-{suffisso}.png")):
-        pezzi = f.stem.split("-")
-        if len(pezzi) < 5 or not pezzi[3].isdigit():
+    for f in sorted(cartella_uscita().glob(f"{NOME}-set-*-{suffisso}.png")):
+        m = rx.match(f.stem)
+        if not m:
             continue
-        out.append({"path": str(f), "tinta": float(pezzi[3]), "file": f.name})
+        out.append({"path": str(f), "tinta": float(m.group(1)), "file": f.name})
     return out
 
 
@@ -539,7 +550,7 @@ def cartella_uscita() -> Path:
     cfg = carica_config()
     if cfg.get("uscita"):
         return Path(cfg["uscita"]).expanduser()
-    return Path.home() / "Pictures" / "teams-tone"
+    return Path.home() / "Pictures" / "intono"
 
 
 def master_path() -> Path:
@@ -592,9 +603,9 @@ def _hsv_to_rgb(hsv: np.ndarray) -> np.ndarray:
     return out
 
 
-def genera(tinta_target: float, lum_maglietta: float, dest: Path,
+def genera(tinta_target: float, lum_maglietta: float, dest: Path | None = None,
            pieno: bool = False, del_set: bool = False,
-           in_teams: bool = True) -> tuple[Path, bool, Path | None]:
+           in_teams: bool = False) -> tuple[Path, bool, Path | None]:
     """Rimappa il master TeamSystem sulla tinta richiesta.
 
     La luminosita viene spinta finche lo stacco dalla maglietta supera la
@@ -607,7 +618,7 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     mp = master_path()
     if not mp.is_file():
         raise SystemExit(f"immagine di base non trovata: {mp}\n"
-                         "Indicane una con: teams-tone --master FOTO.png")
+                         "Indicane una con: intono --master FOTO.png")
 
     src = Image.open(mp).convert("RGB").resize((1920, 1080), Image.LANCZOS)
     a = np.asarray(src).astype(np.float32) / 255.0
@@ -672,15 +683,18 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     # nome deterministico su bucket di 5°: rilanciare con la stessa maglietta
     # riusa lo stesso file invece di riempire la gallery
     bucket = int(round(tinta_target / 5.0)) * 5 % 360
-    uid = uuid.uuid5(NS, f"teams-tone/gen/{bucket}/{'d' if scuro else 'l'}"
-                         f"/{'pieno' if pieno else 'pastello'}")
-    ext = ".png"
-    main = dest / f"{uid}{ext}"
-    gia = main.is_file()
     im = Image.open(tmp).convert("RGB")
-    if in_teams:
+    main, gia = tmp, False
+    if in_teams and dest is not None:
+        # Teams pretende <uuid>.png piu <uuid>_thumb.png. Serve solo a chi usa
+        # la gallery di Teams: con lo sfondo di sistema di macOS quella copia e
+        # solo una miniatura in piu in una griglia gia illeggibile.
+        uid = uuid.uuid5(NS, f"teams-tone/gen/{bucket}/{'d' if scuro else 'l'}"
+                             f"/{'pieno' if pieno else 'pastello'}")
+        main = dest / f"{uid}.png"
+        gia = main.is_file()
         im.save(main)
-        im.resize(THUMB, Image.LANCZOS).save(dest / f"{uid}_thumb{ext}")
+        im.resize(THUMB, Image.LANCZOS).save(dest / f"{uid}_thumb.png")
 
     # Due copie fuori da Teams. Una con nome parlante, da archivio. L'altra
     # sempre allo STESSO percorso: serve per lo sfondo di sistema di macOS
@@ -692,13 +706,17 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     try:
         out_dir = cartella_uscita()
         out_dir.mkdir(parents=True, exist_ok=True)
-        nome = ("teams-tone-set-" if del_set else "teams-tone-")
+        nome = f"{NOME}-set-" if del_set else f"{NOME}-"
         copia = out_dir / f"{nome}{bucket:03d}-{'pieno' if pieno else 'pastello'}.png"
+        gia = gia or copia.is_file()
         im.save(copia)
         im.save(out_dir / "sfondo-attuale.png")
     except OSError as exc:
         print(f"  (copia in {cartella_uscita()} non riuscita: {exc})", file=sys.stderr)
         copia = None
+    # senza installazione in Teams il file "principale" e la copia riusabile
+    if main is tmp and copia is not None:
+        main = copia
     return main, gia, copia
 
 
@@ -741,7 +759,8 @@ MAGLIETTE_COMUNI = [
 ]
 
 
-def init_set(dest: Path, passo: float = PASSO_RUOTA, pieno: bool = False,
+def init_set(dest: Path | None = None, passo: float = PASSO_RUOTA,
+             pieno: bool = False,
              in_teams: bool = False) -> list[Path]:
     """Genera il set di base, ma SOLO le tinte che non sono gia coperte.
 
@@ -810,7 +829,7 @@ def _hex(tinta: float, sat: float, lum: float) -> str:
     return "#%02x%02x%02x" % tuple(int(round(c * 255)) for c in rgb)
 
 
-def pagina(dest: Path, out: Path, pieno: bool = False) -> Path:
+def pagina(dest: Path | None, out: Path, pieno: bool = False) -> Path:
     """Pagina di riferimento: maglietta -> posizione nella griglia di macOS.
 
     Le immagini sono incorporate come data URI: resta un file singolo, funziona
@@ -818,11 +837,14 @@ def pagina(dest: Path, out: Path, pieno: bool = False) -> Path:
     """
     g = misura_set(griglia(pieno))
     sorgente = "griglia"
-    if not g:
+    if not g and dest is not None:
         # senza set, ricado sulla gallery di Teams: meglio una pagina utile a
         # meta che nessuna pagina
         g = leggi_gallery(dest, verbose=False)
         sorgente = "teams"
+    if not g:
+        raise SystemExit("\nNessun set e nessuna gallery da cui costruire la "
+                         "pagina.\nGeneralo con: intono --init\n")
 
     def cella(mag: dict, modo: str) -> str:
         sc, _, _ = scegli(mag, g, modo)
@@ -878,8 +900,8 @@ il set in ordine di nome: controlla qui sotto che l'ordine corrisponda.</p>
     else:
         testa = f"""<h1>Quale sfondo con quale maglietta</h1>
 <p class="sub">Generata dai {len(g)} sfondi nella tua gallery Teams. Per avere
-le posizioni della griglia di macOS: <code>teams-tone --init</code> e poi
-<code>teams-tone --pagina</code>.</p>"""
+le posizioni della griglia di macOS: <code>intono --init</code> e poi
+<code>intono --pagina</code>.</p>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="it"><head><meta charset="utf-8">
@@ -936,7 +958,7 @@ sulla ruota dei colori, contrasto va sul colore opposto a {D_CONTRASTO:.0f}&deg;
 sotto {D_MIMETISMO:.0f}&deg; lo sfondo viene scartato perche ti mimetizzi.
 I valori delle magliette sono tipici di quei capi sotto luce d'ufficio, non
 misure di un campione reale: servono a costruire la tabella. Per la maglietta che
-hai addosso adesso, misurata davvero, lancia <code>teams-tone</code>.</footer>
+hai addosso adesso, misurata davvero, lancia <code>intono</code>.</footer>
 </main></body></html>"""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
@@ -955,7 +977,8 @@ def pulisci(si: bool = False) -> int:
         print(f"\n  {d} non esiste: niente da pulire\n")
         return 0
 
-    files = sorted(set(list(d.glob("teams-tone-*.png")) + list(d.glob("sfondo-attuale.png"))))
+    files = sorted(set(list(d.glob(f"{NOME}-*.png"))
+                       + list(d.glob("sfondo-attuale.png"))))
     if not files:
         print(f"\n  niente da pulire in {d}\n")
         return 0
@@ -1020,7 +1043,7 @@ def main() -> None:
     ap.add_argument("--genera", action="store_true",
                     help="genera un nuovo sfondo invece di indicare la griglia")
     ap.add_argument("--versione", action="version",
-                    version=f"teams-tone {VERSIONE}")
+                    version=f"intono {VERSIONE}")
     ap.add_argument("--out", metavar="DIR",
                     help="cartella dove depositare la copia riusabile")
     ap.add_argument("--pieno", action="store_true",
@@ -1059,7 +1082,7 @@ def main() -> None:
         if not g:
             raise SystemExit(
                 f"\nNessun set in {cartella_uscita()}\n"
-                "Generalo con: teams-tone --init\n")
+                "Generalo con: intono --init\n")
         print(f"\n  {len(g)} sfondi in {cartella_uscita()}")
         print("  Importali in QUESTO ordine in Centro di Controllo > effetti")
         print("  video > Sfondo > +, cosi la posizione corrisponde alla tinta.\n")
@@ -1068,31 +1091,48 @@ def main() -> None:
         print()
         return
 
-    dest = cartella_teams(args.teams_dir)
+    # La cartella di Teams non e piu un prerequisito: serve solo ai comandi che
+    # la usano davvero. Prima il tool si rifiutava di partire senza Teams
+    # installato, anche per generare uno sfondo che in Teams non finisce.
+    dest = None
+
+    def teams_dest() -> Path:
+        nonlocal dest
+        if dest is None:
+            dest = cartella_teams(args.teams_dir)
+        return dest
 
     if args.init:
-        fatti = init_set(dest, pieno=args.pieno, in_teams=args.anche_teams)
+        fatti = init_set(teams_dest() if args.anche_teams else None,
+                         pieno=args.pieno, in_teams=args.anche_teams)
         print(f"\n  {len(fatti)} sfondi nel set, in {cartella_uscita()}")
-        print("  Ora: teams-tone --griglia   per l'ordine di importazione")
+        print("  Ora: intono --griglia   per l'ordine di importazione")
         if args.anche_teams:
             print("  Installati anche in Teams: riavvialo per vederli.")
         print()
         return
 
     if args.pagina:
-        out = pagina(dest, Path.home() / ".cache/teams-tone/sfondi.html",
+        if griglia(args.pieno):
+            dest_pag = None
+        else:
+            try:
+                dest_pag = teams_dest()
+            except SystemExit:
+                dest_pag = None   # ne set ne Teams: lo dira pagina()
+        out = pagina(dest_pag, Path.home() / ".cache/intono/sfondi.html",
                      pieno=args.pieno)
         print(f"\n  pagina: {out}\n")
         if not args.no_open:
             apri(out)
         return
 
-    if args.dai_miei and not leggi_gallery(dest, verbose=False):
+    if args.dai_miei and not leggi_gallery(teams_dest(), verbose=False):
         print("\n  Nessuno sfondo personalizzato in gallery: ne genero uno.")
         args.dai_miei = False
 
     if args.aggiungi:
-        path, gia = aggiungi(Path(args.aggiungi), dest)
+        path, gia = aggiungi(Path(args.aggiungi), teams_dest())
         print(f"\n  {'era gia in gallery' if gia else 'aggiunto'}: {path.name}")
         print("  Riavvia Teams se non lo vedi.\n")
         return
@@ -1112,7 +1152,7 @@ def main() -> None:
         # Scegliere tra gli sfondi gia in gallery e l'eccezione, non la regola:
         # il risultato dipende da cosa ci si e accumulato dentro, che non e
         # prevedibile ne coerente col brand.
-        sfondi = leggi_gallery(dest)
+        sfondi = leggi_gallery(teams_dest())
         scelto, eff, cl = scegli(mag, sfondi, args.mode)
         print(f"  cerco tra i tuoi: {eff}\n")
         for sf, score, nota in cl[:args.top]:
@@ -1142,8 +1182,10 @@ def main() -> None:
             return
 
         print(f"  {etichetta}: genero a {tinta_target:.0f}°")
-        path, riusato, copia = genera(tinta_target, mag["lum"], dest,
-                                      pieno=args.pieno)
+        path, riusato, copia = genera(
+            tinta_target, mag["lum"],
+            teams_dest() if args.anche_teams else None,
+            pieno=args.pieno, in_teams=args.anche_teams)
         scelto = {"path": str(path), "nome": path.stem[:8], **misura_sfondo(path)}
         generato = True
         if riusato:
@@ -1157,8 +1199,10 @@ def main() -> None:
         print(f"\n  copia riusabile (Zoom, Meet, Slides, qualunque cosa):")
         print(f"  {copia}")
         print(f"  {copia.parent / 'sfondo-attuale.png'}   <- sempre questo percorso")
-    if generato:
+    if generato and args.anche_teams:
         print("  Riavvia Teams, poi: Effects and avatars > Sfondi.\n")
+    elif generato:
+        print("  Importalo in Centro di Controllo > effetti video > Sfondo > +\n")
     else:
         print("  In Teams: Effects and avatars > Sfondi, cerca questa immagine.\n")
     if not args.no_open:
