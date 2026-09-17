@@ -1,0 +1,15 @@
+# Immagine di base personale: non finisce nel repo.
+# Puo essere un asset aziendale con marchio, e il repo resta generico.
+master.png
+master.jpg
+master.jpeg
+
+# Sfondi e pagine generati in locale
+sfondi.html
+*.local.png
+
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.DS_Store
