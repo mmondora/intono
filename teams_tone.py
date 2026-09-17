@@ -632,14 +632,21 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     im.save(main)
     im.resize(THUMB, Image.LANCZOS).save(dest / f"{uid}_thumb{ext}")
 
-    # copia riusabile, con nome parlante
-    copia = (cartella_uscita()
-             / f"teams-tone-{bucket:03d}-{'pieno' if pieno else 'pastello'}.png")
+    # Due copie fuori da Teams. Una con nome parlante, da archivio. L'altra
+    # sempre allo STESSO percorso: serve per lo sfondo di sistema di macOS
+    # (Centro di Controllo > effetti video > Sfondo), che si imposta scegliendo
+    # un file. Se macOS tiene il riferimento al percorso invece di copiarsi
+    # l'immagine, sovrascrivere questo file cambia lo sfondo di tutte le app
+    # senza toccare niente: e l'unica strada verso l'automatismo che cercavi.
+    copia = None
     try:
-        copia.parent.mkdir(parents=True, exist_ok=True)
+        out_dir = cartella_uscita()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        copia = out_dir / f"teams-tone-{bucket:03d}-{'pieno' if pieno else 'pastello'}.png"
         im.save(copia)
+        im.save(out_dir / "sfondo-attuale.png")
     except OSError as exc:
-        print(f"  (copia in {copia.parent} non riuscita: {exc})", file=sys.stderr)
+        print(f"  (copia in {cartella_uscita()} non riuscita: {exc})", file=sys.stderr)
         copia = None
     return main, gia, copia
 
@@ -959,6 +966,7 @@ def main() -> None:
     if copia is not None:
         print(f"\n  copia riusabile (Zoom, Meet, Slides, qualunque cosa):")
         print(f"  {copia}")
+        print(f"  {copia.parent / 'sfondo-attuale.png'}   <- sempre questo percorso")
     if generato:
         print("  Riavvia Teams, poi: Effects and avatars > Sfondi.\n")
     else:
