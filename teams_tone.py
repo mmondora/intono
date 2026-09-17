@@ -48,7 +48,11 @@ LUM_PENALITA = 8.0
 CROMA_TOLLERANZA = 18.0  # di quanto lo sfondo puo essere piu carico della maglietta
 CROMA_PENALITA = 0.35    # punti per unita di croma in eccesso
 COERENZA_MIN = 0.60      # sotto: l'immagine non ha una tinta dominante chiara
-CONFUSIONE_MAX = 0.040   # sopra: immagine troppo affollata, distrae in call
+CONFUSIONE_MAX = 0.020   # sopra: immagine troppo affollata, distrae in call
+# Calibrata su immagini reali, non su casi sintetici estremi: i gradienti lisci
+# stanno a 0.001-0.010, una foto di una stanza dettagliata a 0.03. Il valore
+# precedente (0.040) veniva da rumore RGB e righe a contrasto pieno, che sono
+# molto piu "energici" di una foto vera e lasciavano passare tutto il resto.
 
 REC709 = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 FINESTRA_TINTA = 25.0
@@ -65,7 +69,7 @@ CACHE = Path.home() / ".cache/teams-tone/misure.json"
 # Versione dello schema di misura: entra nella chiave di cache, cosi cambiare
 # le metriche invalida le voci vecchie invece di leggerne i campi mancanti
 # come zero, che disattiverebbe una penalita senza dirlo.
-MISURA_V = 2
+MISURA_V = 3
 CONFIG = Path.home() / ".config/teams-tone/config.json"
 
 
@@ -192,7 +196,12 @@ def misura(rgb: np.ndarray) -> dict:
     croma = float(np.median(_croma_lab(rgb.reshape(-1, 3))))
 
     neutra = sat < 0.12
-    usabile = neutra or (coerenza >= COERENZA_MIN and confusione <= CONFUSIONE_MAX)
+    # La confusione vale SEMPRE. Prima era "neutra or (...)": un'immagine quasi
+    # senza colore passava qualunque fosse il suo livello di dettaglio, quindi
+    # una foto piena di oggetti in bianco e grigio risultava usabile. La deroga
+    # per le immagini neutre riguarda solo la coerenza di tinta, che su una cosa
+    # grigia non e misurabile ne significativa.
+    usabile = confusione <= CONFUSIONE_MAX and (neutra or coerenza >= COERENZA_MIN)
     return {"tinta": round(tinta, 1), "sat": round(sat, 3), "lum": round(lum, 3),
             "croma": round(croma, 1), "coerenza": round(coerenza, 3),
             "confusione": round(confusione, 4), "neutra": neutra, "usabile": usabile}
