@@ -19,9 +19,12 @@ teams-tone --pagina   pagina HTML: quale sfondo con quale maglietta
 teams-tone --master FOTO.png    cambia l'immagine di partenza
 ```
 
-Si apre sempre un'immagine: è lo sfondo da cercare in Teams (**Effects and
-avatars → Sfondi**). Serve perché la tua griglia ha trenta miniature senza nomi,
-e sapere che si chiama "avocado" non aiuta a trovarla.
+Si apre il file dello sfondo scelto, così com'è: è quello da cercare in Teams
+(**Effects and avatars → Sfondi**). Serve perché la tua griglia ha trenta
+miniature senza nomi, e sapere che si chiama "avocado" non aiuta a trovarla.
+Nessuna didascalia e nessuna pastiglia di colore sopra: un'anteprima con delle
+scritte è indistinguibile dallo sfondo vero, e fa pensare di averle addosso in
+riunione. I numeri stanno nel terminale.
 
 Altre opzioni: `--mode tono|contrasto` per forzare il criterio, `--genera` per
 generarne uno su misura comunque, `--sheet` per una tavola numerata dei tuoi

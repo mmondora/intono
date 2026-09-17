@@ -17,7 +17,9 @@ $ teams-tone
      teal.png     tinta  186.7°  179° dalla maglietta
      oro.png      tinta   33.7°  scartata: solo 26° dalla maglietta, ti mimetizzi
 
-  Preview: ~/.cache/teams-tone/scelto.png
+  sfondo: avocado.png
+  tinta 67°   luminosita 0.65
+  In Teams: Effects and avatars > Sfondi, cerca questa immagine.
 ```
 
 ## Why it exists
@@ -48,7 +50,7 @@ On first run macOS asks for camera access. Grant it to your terminal, or to the
 
 | Command | What it does |
 | --- | --- |
-| `teams-tone` | look at the shirt, recommend a background, open a preview |
+| `teams-tone` | look at the shirt, recommend a background, open its image |
 | `teams-tone --init` | fill gaps in your base set around the colour wheel |
 | `teams-tone --pagina` | single-file HTML page: which background for which shirt |
 | `teams-tone --master FILE` | set the base image new backgrounds are derived from |
@@ -106,8 +108,10 @@ Cleanup only ever touches entries this tool created.
 **It does not select the background for you.** Teams exposes no API for that —
 not in Graph, not in the Teams JS SDK. The `videoEffects` capability, which
 could process frames directly, is Beta and explicitly not recommended for
-production. So the last click stays yours, and the preview exists because in a
-grid of thirty unlabelled thumbnails knowing the name is useless.
+production. So the last click stays yours. The tool opens the chosen
+background's own file — unaltered, no caption, no colour swatch — because in a
+grid of thirty unlabelled thumbnails the name is useless and anything drawn on
+top would make the preview look like the thing you are about to wear.
 
 Windows paths and capture are not implemented yet; the Teams background folder
 and webcam backend are macOS-only in this version.

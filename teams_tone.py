@@ -344,11 +344,6 @@ def zona_busto(rgb: np.ndarray) -> tuple[np.ndarray, str]:
             "volto non trovato, guardo la fascia bassa centrale")
 
 
-def colore_medio(roi: np.ndarray) -> tuple[int, int, int]:
-    px = roi.reshape(-1, 3).astype(np.float32)
-    return tuple(int(v) for v in np.median(px, axis=0))
-
-
 # --------------------------------------------------------------------------- #
 # scelta
 # --------------------------------------------------------------------------- #
@@ -421,25 +416,6 @@ def apri(path: Path) -> None:
             os.startfile(str(path))  # type: ignore[attr-defined]
     except Exception:
         pass
-
-
-def preview(scelto: dict, rgb_maglietta, out: Path) -> Path:
-    """L'immagine da cercare nella griglia. In trenta miniature senza nome,
-    sapere che si chiama 'avocado' non serve: bisogna vederla."""
-    bg = Image.open(scelto["path"]).convert("RGB").resize((720, 405), Image.LANCZOS)
-    c = Image.new("RGB", (720, 500), (22, 22, 24))
-    c.paste(bg, (0, 0))
-    d = ImageDraw.Draw(c)
-    if rgb_maglietta:
-        c.paste(Image.new("RGB", (76, 60), tuple(rgb_maglietta)), (18, 420))
-        d.text((18, 484), "maglietta", fill=(130, 130, 135))
-    d.text((110, 424), "Cerca QUESTO sfondo in Teams", fill=(245, 245, 245))
-    d.text((110, 446), f"tinta {scelto['tinta']:.0f}°   "
-                       f"luminosita {scelto['lum']:.2f}", fill=(150, 150, 155))
-    d.text((110, 466), Path(scelto["path"]).name, fill=(110, 110, 115))
-    out.parent.mkdir(parents=True, exist_ok=True)
-    c.save(out)
-    return out
 
 
 def tavola(sfondi: list[dict], out: Path) -> Path:
@@ -807,7 +783,7 @@ def main() -> None:
     ap.add_argument("--genera", action="store_true",
                     help="genera uno sfondo su misura anche se uno dei tuoi va bene")
     ap.add_argument("--top", type=int, default=5, help="quante alternative mostrare")
-    ap.add_argument("--no-open", action="store_true", help="non aprire il preview")
+    ap.add_argument("--no-open", action="store_true", help="non aprire l'immagine dello sfondo")
     args = ap.parse_args()
 
     if args.master:
@@ -863,7 +839,6 @@ def main() -> None:
              if args.image else scatta())
     roi, come = zona_busto(frame)
     mag = misura(roi)
-    rgb_mag = colore_medio(roi)
 
     print(f"\n  {come}")
     print(f"  maglietta: tinta {mag['tinta']:.0f}°  "
@@ -892,12 +867,16 @@ def main() -> None:
               f"{' (riuso quello di prima)' if riusato else ''}")
         print(f"  {'aggiornato' if riusato else 'aggiunto alla gallery'}: {path.name}")
 
-    out = preview(scelto, rgb_mag, Path.home() / ".cache/teams-tone/scelto.png")
-    print(f"\n  Preview: {out}")
+    # Si apre il file dello sfondo cosi com'e. Un'anteprima con sopra didascalia
+    # e pastiglia del colore e indistinguibile dal prodotto finale: chi la apre
+    # pensa che in riunione avra quelle scritte addosso.
+    out = Path(scelto["path"])
+    print(f"\n  sfondo: {out.name}")
+    print(f"  tinta {scelto['tinta']:.0f}°   luminosita {scelto['lum']:.2f}")
     if generato:
-        print("  Riavvia Teams per vederlo, poi: Effects and avatars > Sfondi.\n")
+        print("  Riavvia Teams, poi: Effects and avatars > Sfondi.\n")
     else:
-        print("  In Teams: Effects and avatars > Sfondi, e cerca questa immagine.\n")
+        print("  In Teams: Effects and avatars > Sfondi, cerca questa immagine.\n")
     if not args.no_open:
         apri(out)
 
