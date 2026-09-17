@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-teams-tone - ti dice quale dei TUOI sfondi Teams sta bene con la maglietta.
+teams-tone - genera lo sfondo Teams in armonia con la maglietta che hai addosso.
 
-Uno scatto dalla webcam, legge il colore della maglietta, misura gli sfondi che
-hai gia in gallery e apre l'immagine di quello giusto, cosi la riconosci nella
-griglia di miniature. Non aggiunge niente alla gallery, se non glielo chiedi.
+Uno scatto dalla webcam, legge il colore della maglietta, rimappa la tua
+immagine di base sulla tinta giusta e mette lo sfondo in gallery. Il nome del
+file e deterministico per fascia di tinta: la stessa maglietta riusa lo stesso
+sfondo invece di accumularne.
 
-    teams-tone                    scegli tra i tuoi sfondi
+    teams-tone                    genera lo sfondo per questa maglietta
     teams-tone --mode tono        armonia morbida (salmone -> verde oliva)
     teams-tone --mode contrasto   colore opposto (salmone -> teal)
-    teams-tone --sheet            tavola numerata di tutti i tuoi sfondi
-    teams-tone --aggiungi FILE    aggiungi un'immagine alla gallery Teams
+    teams-tone --dai-miei         scegli tra gli sfondi che hai gia, non generare
+    teams-tone --master FOTO      imposta l'immagine di base
+    teams-tone --init             completa il set di base sulla ruota dei colori
+    teams-tone --pagina           pagina HTML: quale sfondo con quale maglietta
     teams-tone --image FOTO       usa una foto invece della webcam (per provare)
 
 Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
@@ -413,6 +416,21 @@ def scegli(maglietta: dict, sfondi: list[dict], mode: str):
     return (cl[0][0] if cl and cl[0][1] > -1e5 else None), eff, cl
 
 
+def bersaglio(maglietta: dict, mode: str) -> tuple[float, str]:
+    """Tinta da generare e modalita effettiva, senza guardare la gallery.
+
+    Maglietta senza tinta: la ruota dei colori non dice niente, quindi resto
+    sulla tinta del master (il brand) e lascio che sia la luminanza a creare lo
+    stacco, cosa che genera() garantisce per costruzione.
+    """
+    if maglietta["sat"] < S_ACROMATICA:
+        return master_tinta(), "neutro"
+    eff = mode if mode != "auto" else (
+        "contrasto" if maglietta["sat"] >= S_ACCESA else "tono")
+    delta = D_CONTRASTO if eff == "contrasto" else D_TONO
+    return (maglietta["tinta"] + delta) % 360.0, eff
+
+
 # --------------------------------------------------------------------------- #
 # output visivo
 # --------------------------------------------------------------------------- #
@@ -789,9 +807,9 @@ def main() -> None:
                     help="pagina HTML: quale sfondo con quale maglietta")
     ap.add_argument("--master", metavar="FOTO",
                     help="imposta l'immagine di base da cui generare")
-    ap.add_argument("--genera", action="store_true",
-                    help="genera uno sfondo su misura anche se uno dei tuoi va bene")
-    ap.add_argument("--top", type=int, default=5, help="quante alternative mostrare")
+    ap.add_argument("--dai-miei", action="store_true", dest="dai_miei",
+                    help="scegli tra gli sfondi che hai gia, invece di generarne uno")
+    ap.add_argument("--top", type=int, default=5, help="quante alternative mostrare (con --dai-miei)")
     ap.add_argument("--no-open", action="store_true", help="non aprire l'immagine dello sfondo")
     args = ap.parse_args()
 
@@ -825,23 +843,14 @@ def main() -> None:
             apri(out)
         return
 
+    if args.dai_miei and not leggi_gallery(dest, verbose=False):
+        print("\n  Nessuno sfondo personalizzato in gallery: ne genero uno.")
+        args.dai_miei = False
+
     if args.aggiungi:
         path, gia = aggiungi(Path(args.aggiungi), dest)
         print(f"\n  {'era gia in gallery' if gia else 'aggiunto'}: {path.name}")
         print("  Riavvia Teams se non lo vedi.\n")
-        return
-
-    sfondi = leggi_gallery(dest)
-    if not sfondi and args.sheet:
-        raise SystemExit(f"\nNessuno sfondo personalizzato in {dest}\n")
-    if not sfondi:
-        print("\n  Nessuno sfondo personalizzato in gallery: ne generero uno.")
-
-    if args.sheet:
-        out = tavola(sfondi, Path.home() / ".cache/teams-tone/tavola.png")
-        print(f"\n  {len(sfondi)} sfondi. Tavola: {out}\n")
-        if not args.no_open:
-            apri(out)
         return
 
     frame = (np.asarray(Image.open(args.image).convert("RGB"))
@@ -853,35 +862,37 @@ def main() -> None:
     print(f"  maglietta: tinta {mag['tinta']:.0f}°  "
           f"intensita {mag['sat']:.2f}  luminosita {mag['lum']:.2f}")
 
-    scelto, eff, cl = scegli(mag, sfondi, args.mode)
-    print(f"  cerco: {'colore opposto' if eff == 'contrasto' else 'armonia morbida' if eff == 'tono' else eff}\n")
+    scelto, generato = None, False
 
-    for s, score, nota in cl[:args.top]:
-        mark = "->" if scelto is not None and s is scelto else "  "
-        print(f"  {mark} {Path(s['path']).name[:12]:12s} tinta {s['tinta']:6.1f}°  {nota}")
-
-    generato = False
-    if scelto is None or args.genera:
+    if args.dai_miei:
+        # Scegliere tra gli sfondi gia in gallery e l'eccezione, non la regola:
+        # il risultato dipende da cosa ci si e accumulato dentro, che non e
+        # prevedibile ne coerente col brand.
+        sfondi = leggi_gallery(dest)
+        scelto, eff, cl = scegli(mag, sfondi, args.mode)
+        print(f"  cerco tra i tuoi: {eff}\n")
+        for sf, score, nota in cl[:args.top]:
+            mark = "->" if scelto is not None and sf is scelto else "  "
+            print(f"  {mark} {Path(sf['path']).name[:12]:12s} "
+                  f"tinta {sf['tinta']:6.1f}°  {nota}")
         if scelto is None:
-            print("\n  Nessuno dei tuoi sfondi regge questa maglietta: ne genero uno.")
-        else:
-            print("\n  Genero uno sfondo su misura (--genera).")
-        delta = D_CONTRASTO if eff == "contrasto" else D_TONO
-        tinta_target = (mag["tinta"] + delta) % 360.0
-        path, riusato = genera(tinta_target, mag["lum"], dest)
-        m = misura_sfondo(path)
-        scelto = {"path": str(path), "nome": path.stem[:8], **m}
-        generato = True
-        print(f"  tinta {tinta_target:.0f}° dal master TeamSystem"
-              f"{' (riuso quello di prima)' if riusato else ''}")
-        print(f"  {'aggiornato' if riusato else 'aggiunto alla gallery'}: {path.name}")
+            print("\n  Nessuno dei tuoi regge questa maglietta: ne genero uno.")
 
-    # Si apre il file dello sfondo cosi com'e. Un'anteprima con sopra didascalia
-    # e pastiglia del colore e indistinguibile dal prodotto finale: chi la apre
-    # pensa che in riunione avra quelle scritte addosso.
+    if scelto is None:
+        tinta_target, eff = bersaglio(mag, args.mode)
+        etichetta = {"contrasto": "colore opposto", "tono": "armonia morbida",
+                     "neutro": "maglietta senza tinta, resto sul brand"}[eff]
+        print(f"  {etichetta}: genero a {tinta_target:.0f}°")
+        path, riusato = genera(tinta_target, mag["lum"], dest)
+        scelto = {"path": str(path), "nome": path.stem[:8], **misura_sfondo(path)}
+        generato = True
+        if riusato:
+            print("  (stesso sfondo dell'ultima volta con questa maglietta)")
+
     out = Path(scelto["path"])
     print(f"\n  sfondo: {out.name}")
     print(f"  tinta {scelto['tinta']:.0f}°   luminosita {scelto['lum']:.2f}")
+    print(f"  {out}")
     if generato:
         print("  Riavvia Teams, poi: Effects and avatars > Sfondi.\n")
     else:

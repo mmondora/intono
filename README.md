@@ -1,8 +1,8 @@
 # teams-tone
 
-Picks the Microsoft Teams background that goes with the shirt you are actually
-wearing. One webcam shot, a stated colour-harmony rule, and the answer is one of
-the backgrounds you already have — or a new one generated for the occasion.
+Generates the Microsoft Teams background that goes with the shirt you are
+actually wearing. One webcam shot, a stated colour-harmony rule, and your own
+base image remapped to the hue that works.
 
 No cloud, no network calls, no Teams API. The frame never leaves your machine.
 
@@ -11,15 +11,13 @@ $ teams-tone
 
   volto trovato, guardo il busto sotto
   maglietta: tinta 8°  intensita 0.50  luminosita 0.52
-  cerco: armonia morbida
 
-  -> avocado.png  tinta   66.9°  59° dalla maglietta
-     teal.png     tinta  186.7°  179° dalla maglietta
-     oro.png      tinta   33.7°  scartata: solo 26° dalla maglietta, ti mimetizzi
+  armonia morbida: genero a 78°
 
-  sfondo: avocado.png
-  tinta 67°   luminosita 0.65
-  In Teams: Effects and avatars > Sfondi, cerca questa immagine.
+  sfondo: 48dcce38-b4d8-598a-b0ca-9f8446638ff7.png
+  tinta 76°   luminosita 0.43
+  /Users/you/Library/Containers/com.microsoft.teams2/.../Uploads/48dcce38-....png
+  Riavvia Teams, poi: Effects and avatars > Sfondi.
 ```
 
 ## Why it exists
@@ -50,12 +48,12 @@ On first run macOS asks for camera access. Grant it to your terminal, or to the
 
 | Command | What it does |
 | --- | --- |
-| `teams-tone` | look at the shirt, recommend a background, open its image |
+| `teams-tone` | look at the shirt, generate the matching background, open it |
+| `teams-tone --dai-miei` | pick among the backgrounds you already have instead |
 | `teams-tone --init` | fill gaps in your base set around the colour wheel |
 | `teams-tone --pagina` | single-file HTML page: which background for which shirt |
 | `teams-tone --master FILE` | set the base image new backgrounds are derived from |
 | `teams-tone --mode tono\|contrasto` | force soft harmony or complementary |
-| `teams-tone --genera` | generate a made-to-measure background anyway |
 | `teams-tone --sheet` | numbered contact sheet of every background you have |
 | `teams-tone --aggiungi FILE` | add an image to the Teams gallery |
 | `teams-tone --image FILE` | use a photo instead of the webcam |
@@ -97,6 +95,13 @@ into eight sectors from your base image's hue and generates only the sectors you
 do not already cover. The problem with a Teams gallery is not having too few
 backgrounds, it is finding one; a full set on every install would double a grid
 that is already hard to read.
+
+**Generating is the default; picking among your own is opt-in.** Choosing from
+whatever is already in the gallery sounds friendlier, but the result depends on
+what has accumulated there — old photos, images from other people, things that
+are not yours to match against. Generating from your base image is predictable,
+stays on brand, and never surprises you in a meeting. `--dai-miei` restores the
+other behaviour when you want it.
 
 **Installed files are content-addressed and idempotent.** Backgrounds get
 deterministic `uuid5` names, so re-running overwrites instead of accumulating,

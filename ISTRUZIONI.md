@@ -1,7 +1,7 @@
 # teams-tone
 
-Guarda la maglietta dalla webcam e ti dice quale dei **tuoi** sfondi Teams ci sta
-bene. Se nessuno funziona, se ne genera uno.
+Guarda la maglietta dalla webcam e **genera** lo sfondo Teams che ci sta bene,
+rimappando la tua immagine di base sulla tinta giusta.
 
 ## Installazione
 
@@ -13,7 +13,8 @@ bene. Se nessuno funziona, se ne genera uno.
 ## I quattro comandi che servono
 
 ```
-teams-tone            guarda la maglietta e dimmi quale sfondo usare
+teams-tone            genera lo sfondo per la maglietta che hai addosso
+teams-tone --dai-miei scegli tra gli sfondi che hai gia, invece di generarne
 teams-tone --init     completa il set di base (solo le tinte che non hai)
 teams-tone --pagina   pagina HTML: quale sfondo con quale maglietta
 teams-tone --master FOTO.png    cambia l'immagine di partenza
@@ -26,8 +27,7 @@ Nessuna didascalia e nessuna pastiglia di colore sopra: un'anteprima con delle
 scritte è indistinguibile dallo sfondo vero, e fa pensare di averle addosso in
 riunione. I numeri stanno nel terminale.
 
-Altre opzioni: `--mode tono|contrasto` per forzare il criterio, `--genera` per
-generarne uno su misura comunque, `--sheet` per una tavola numerata dei tuoi
+Altre opzioni: `--mode tono|contrasto` per forzare il criterio, `--sheet` per una tavola numerata dei tuoi
 sfondi, `--aggiungi FILE` per metterne uno in gallery, `--image FOTO` per provare
 senza webcam.
 
