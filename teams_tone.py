@@ -21,7 +21,7 @@ Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
 
 from __future__ import annotations
 
-VERSIONE = "0.7.0"   # unica fonte: install.sh la legge da qui
+VERSIONE = "0.8.1"   # unica fonte: install.sh la legge da qui
 
 import argparse
 import hashlib
@@ -429,11 +429,11 @@ def griglia(pieno: bool = False) -> list[dict]:
     """
     suffisso = "pieno" if pieno else "pastello"
     out = []
-    for f in sorted(cartella_uscita().glob(f"teams-tone-*-{suffisso}.png")):
+    for f in sorted(cartella_uscita().glob(f"teams-tone-set-*-{suffisso}.png")):
         pezzi = f.stem.split("-")
-        if len(pezzi) < 4 or not pezzi[2].isdigit():
+        if len(pezzi) < 5 or not pezzi[3].isdigit():
             continue
-        out.append({"path": str(f), "tinta": float(pezzi[2]), "file": f.name})
+        out.append({"path": str(f), "tinta": float(pezzi[3]), "file": f.name})
     return out
 
 
@@ -573,7 +573,8 @@ def _hsv_to_rgb(hsv: np.ndarray) -> np.ndarray:
 
 
 def genera(tinta_target: float, lum_maglietta: float, dest: Path,
-           pieno: bool = False) -> tuple[Path, bool, Path | None]:
+           pieno: bool = False, del_set: bool = False,
+           in_teams: bool = True) -> tuple[Path, bool, Path | None]:
     """Rimappa il master TeamSystem sulla tinta richiesta.
 
     La luminosita viene spinta finche lo stacco dalla maglietta supera la
@@ -657,8 +658,9 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     main = dest / f"{uid}{ext}"
     gia = main.is_file()
     im = Image.open(tmp).convert("RGB")
-    im.save(main)
-    im.resize(THUMB, Image.LANCZOS).save(dest / f"{uid}_thumb{ext}")
+    if in_teams:
+        im.save(main)
+        im.resize(THUMB, Image.LANCZOS).save(dest / f"{uid}_thumb{ext}")
 
     # Due copie fuori da Teams. Una con nome parlante, da archivio. L'altra
     # sempre allo STESSO percorso: serve per lo sfondo di sistema di macOS
@@ -670,7 +672,8 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     try:
         out_dir = cartella_uscita()
         out_dir.mkdir(parents=True, exist_ok=True)
-        copia = out_dir / f"teams-tone-{bucket:03d}-{'pieno' if pieno else 'pastello'}.png"
+        nome = ("teams-tone-set-" if del_set else "teams-tone-")
+        copia = out_dir / f"{nome}{bucket:03d}-{'pieno' if pieno else 'pastello'}.png"
         im.save(copia)
         im.save(out_dir / "sfondo-attuale.png")
     except OSError as exc:
@@ -718,8 +721,8 @@ MAGLIETTE_COMUNI = [
 ]
 
 
-def init_set(dest: Path, passo: float = PASSO_RUOTA,
-             pieno: bool = False) -> list[Path]:
+def init_set(dest: Path, passo: float = PASSO_RUOTA, pieno: bool = False,
+             in_teams: bool = False) -> list[Path]:
     """Genera il set di base, ma SOLO le tinte che non sono gia coperte.
 
     Generare un set completo a ogni installazione raddoppierebbe una gallery
@@ -727,15 +730,19 @@ def init_set(dest: Path, passo: float = PASSO_RUOTA,
     pochi sfondi, e trovarli. Quindi copro i buchi sulla ruota dei colori e
     lascio stare il resto.
     """
-    esistenti = [s for s in leggi_gallery(dest, verbose=False)
-                 if s["usabile"] and not s["neutra"]]
-    hue_esistenti = [s["tinta"] for s in esistenti]
+    # La copertura si misura sul set in cartella_uscita(), non sulla gallery di
+    # Teams: sono due collezioni diverse, e quella che va importata nella
+    # griglia di macOS deve essere completa per conto suo. Guardare la gallery
+    # di Teams faceva saltare i settori "gia coperti" da immagini che nella
+    # griglia non ci sono.
+    hue_esistenti = [e["tinta"] for e in griglia(pieno)]
     base = master_tinta()
     bersagli = [(base + k * passo) % 360.0 for k in range(int(round(360.0 / passo)))]
 
     print(f"\n  immagine di base: tinta {base:.0f}°")
+    print(f"  set in {cartella_uscita()}")
     if hue_esistenti:
-        print("  tinte che hai gia: "
+        print("  tinte che il set ha gia: "
               + ", ".join(f"{h:.0f}°" for h in sorted(hue_esistenti)))
 
     fatti = []
@@ -746,10 +753,15 @@ def init_set(dest: Path, passo: float = PASSO_RUOTA,
             continue
         # luminanza di riferimento 0.5: il set di base non e legato a una
         # maglietta specifica, la scelta fine la fa la regola al momento dell'uso
-        path, riusato, _ = genera(t, 0.5, dest, pieno=pieno)
-        hue_esistenti.append(misura_sfondo(path)["tinta"])
+        # Per default NON finisce anche nella gallery di Teams: il set serve
+        # alla griglia di macOS, e otto miniature in piu la in mezzo sono
+        # esattamente l'ingombro che questo tool cerca di evitare.
+        path, riusato, _ = genera(t, 0.5, dest, pieno=pieno, del_set=True,
+                                  in_teams=in_teams)
+        hue_esistenti.append(float(int(round(t / 5.0)) * 5 % 360))
         fatti.append(path)
-        print(f"  {t:5.0f}°  {'aggiornata' if riusato else 'generata'}: {path.name}")
+        etichetta = "aggiornata" if riusato else "generata"
+        print(f"  {t:5.0f}°  {etichetta}")
     return fatti
 
 
@@ -893,6 +905,8 @@ def main() -> None:
                     help="pagina HTML: quale sfondo con quale maglietta")
     ap.add_argument("--master", metavar="FOTO",
                     help="imposta l'immagine di base da cui generare")
+    ap.add_argument("--anche-teams", action="store_true", dest="anche_teams",
+                    help="con --init, installa il set anche nella gallery Teams")
     ap.add_argument("--griglia", action="store_true",
                     help="elenca il set nell'ordine in cui importarlo in macOS")
     ap.add_argument("--genera", action="store_true",
@@ -945,12 +959,12 @@ def main() -> None:
     dest = cartella_teams(args.teams_dir)
 
     if args.init:
-        fatti = init_set(dest, pieno=args.pieno)
-        out = pagina(dest, Path.home() / ".cache/teams-tone/sfondi.html")
-        print(f"\n  {len(fatti)} sfondi generati. Pagina: {out}")
-        print("  Riavvia Teams per vedere i nuovi sfondi.\n")
-        if not args.no_open:
-            apri(out)
+        fatti = init_set(dest, pieno=args.pieno, in_teams=args.anche_teams)
+        print(f"\n  {len(fatti)} sfondi nel set, in {cartella_uscita()}")
+        print("  Ora: teams-tone --griglia   per l'ordine di importazione")
+        if args.anche_teams:
+            print("  Installati anche in Teams: riavvialo per vederli.")
+        print()
         return
 
     if args.pagina:

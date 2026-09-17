@@ -7,6 +7,22 @@ copia stai eseguendo.
 
 Da alzare a ogni cambiamento che tocchi il comportamento.
 
+## 0.8.1
+
+- `--init` misurava la copertura sulla **gallery di Teams** mentre costruiva il
+  set per la griglia di macOS: due collezioni diverse. Saltava i settori "gia
+  coperti" da immagini che nella griglia non ci sono, e produceva un set
+  incompleto — tre sfondi invece di otto. Ora la copertura si misura sul set.
+- Il set canonico ha un prefisso proprio (`teams-tone-set-NNN-...`), cosi le
+  generazioni ad-hoc per una maglietta specifica non finiscono nella griglia e
+  non spostano le posizioni.
+- `--init` non installa piu il set anche nella gallery di Teams: serve alla
+  griglia di macOS, e otto miniature in piu la in mezzo sono esattamente
+  l'ingombro che il tool cerca di evitare. `--anche-teams` lo fa comunque.
+- README e ISTRUZIONI riscritti intorno alla griglia di macOS come strada
+  principale, con la gallery di Teams come alternativa per webcam USB, Mac Intel
+  o sfondi solo dentro Teams.
+
 ## 0.8.0
 
 - **La griglia di macOS.** Verificato che macOS si copia l'immagine quando la
