@@ -7,6 +7,22 @@ copia stai eseguendo.
 
 Da alzare a ogni cambiamento che tocchi il comportamento.
 
+## 0.9.0
+
+- La pagina HTML (`--pagina`) e costruita sulla **griglia**, non piu sulla
+  gallery di Teams: ogni riga dice quale **posizione** cliccare, con il numero
+  sulla miniatura. In testa c'e la striscia del set numerata, per verificare che
+  l'ordine di importazione corrisponda. Senza set ricade sulla gallery di Teams
+  e lo dice.
+- `--delete` cancella dalla cartella di uscita solo i file che il tool ha creato
+  (`teams-tone-*.png`, `sfondo-attuale.png`), elencandoli e chiedendo conferma.
+  Il filtro e sui nomi e non su tutta la cartella: in Pictures ci sono le foto
+  di qualcuno. `--si` salta la conferma; senza terminale interattivo si ferma e
+  lo dice invece di procedere.
+- Rimossa una duplicazione di sei funzioni e di `MAGLIETTE_COMUNI` introdotta
+  riscrivendo `pagina()`: le due copie erano identiche, quindi il comportamento
+  non era cambiato, ma Python teneva la seconda.
+
 ## 0.8.1
 
 - `--init` misurava la copertura sulla **gallery di Teams** mentre costruiva il

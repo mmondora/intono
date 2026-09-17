@@ -54,10 +54,10 @@ teams-tone --griglia                              # the order to import them in
 `--griglia` prints the set:
 
 ```
-   1.  tinta  35°   teams-tone-035-pastello.png
-   2.  tinta  80°   teams-tone-080-pastello.png
-   3.  tinta 125°   teams-tone-125-pastello.png
-   4.  tinta 185°   teams-tone-185-pastello.png
+   1.  tinta  35°   teams-tone-set-035-pastello.png
+   2.  tinta  80°   teams-tone-set-080-pastello.png
+   3.  tinta 125°   teams-tone-set-125-pastello.png
+   4.  tinta 170°   teams-tone-set-170-pastello.png
    ...
 ```
 
@@ -68,7 +68,13 @@ slot 4". From then on:
 
 ```bash
 teams-tone          # → griglia macOS: posizione 4 di 8
+teams-tone --pagina # a cheat-sheet: shirt colour → slot, as one HTML file
 ```
+
+`--pagina` writes a single self-contained HTML file — thumbnails embedded, works
+offline, sendable to a colleague — with the numbered set across the top so you
+can check your import order, then a row per common shirt colour giving the slot
+for soft harmony and for contrast.
 
 Nothing is generated, so it answers instantly. The chosen slot is at most ~22°
 from the ideal hue — half of the 45° spacing, comfortably inside the harmony
@@ -126,7 +132,8 @@ replaced, and `teams-tone --versione` says which copy you are running.
 | `teams-tone --pieno` | punchier rendering instead of the pastel default |
 | `teams-tone --out DIR` | where to keep the reusable copies |
 | `teams-tone --dai-miei` | pick among backgrounds already in the Teams gallery |
-| `teams-tone --pagina` | single-file HTML page: which background for which shirt |
+| `teams-tone --pagina` | single-file HTML page: which slot for which shirt |
+| `teams-tone --delete` | remove the backgrounds the tool created in Pictures |
 | `teams-tone --sheet` | numbered contact sheet of your Teams backgrounds |
 | `teams-tone --aggiungi FILE` | add an image to the Teams gallery |
 | `teams-tone --image FILE` | use a photo instead of the webcam |

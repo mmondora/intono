@@ -62,6 +62,12 @@ teams-tone
   griglia macOS: posizione 4 di 8   (tinta 185°, 2° dall'ideale)
 ```
 
+E `teams-tone --pagina` ti fa il promemoria: un file HTML unico, con in testa
+il set numerato per controllare l'ordine di importazione, e una riga per ogni
+colore di maglietta con la posizione da cliccare in armonia morbida e in
+contrasto. Miniature incorporate, funziona offline, lo mandi a un collega senza
+allegare cartelle.
+
 Non genera niente, quindi risponde subito. Lo scarto dall'ideale resta sotto i
 22°, metà del passo di 45°: dentro la tolleranza dell'armonia.
 
@@ -130,6 +136,20 @@ Sono le costanti in testa a `teams_tone.py`:
   bianca scuro
 - immagini **affollate o senza tinta dominante** escluse dalla scelta
   automatica: una foto di una libreria non ha un colore
+
+## Pulire
+
+```
+teams-tone --delete
+```
+
+Cancella dalla cartella di uscita **solo i file che il tool ha creato**
+(`teams-tone-*.png` e `sfondo-attuale.png`), elencandoli prima e chiedendo
+conferma. Il filtro è sui nomi e non su tutta la cartella, perché in Pictures ci
+sono anche le tue foto. `--si` salta la conferma.
+
+Le copie che macOS si è già importato nella sua griglia restano: quelle si
+togliono da Centro di Controllo → effetti video → Sfondo.
 
 ## Disinstallare
 

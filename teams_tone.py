@@ -21,7 +21,7 @@ Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
 
 from __future__ import annotations
 
-VERSIONE = "0.8.1"   # unica fonte: install.sh la legge da qui
+VERSIONE = "0.9.0"   # unica fonte: install.sh la legge da qui
 
 import argparse
 import hashlib
@@ -269,6 +269,31 @@ def _cache_save(c: dict) -> None:
         pass
 
 
+def _misura_cached(f: Path, cache: dict) -> tuple[dict, bool]:
+    """Misura con cache su (versione, percorso, mtime, dimensione)."""
+    st = f.stat()
+    key = f"v{MISURA_V}|{f}|{int(st.st_mtime)}|{st.st_size}"
+    m = cache.get(key)
+    if m is not None:
+        return m, False
+    m = misura_sfondo(f)
+    cache[key] = m
+    return m, True
+
+
+def misura_set(g: list[dict]) -> list[dict]:
+    """Arricchisce le voci della griglia con le misure di colore."""
+    cache = _cache_load()
+    out, nuovi = [], 0
+    for i, e in enumerate(g, 1):
+        m, fresco = _misura_cached(Path(e["path"]), cache)
+        nuovi += fresco
+        out.append({**e, **m, "pos": i})
+    if nuovi:
+        _cache_save(cache)
+    return out
+
+
 def leggi_gallery(dest: Path, verbose: bool = True) -> list[dict]:
     """Misura gli sfondi presenti, con cache su (percorso, mtime, dimensione)."""
     files = sorted(f for f in dest.iterdir()
@@ -276,13 +301,8 @@ def leggi_gallery(dest: Path, verbose: bool = True) -> list[dict]:
     cache = _cache_load()
     out, nuovi = [], 0
     for f in files:
-        st = f.stat()
-        key = f"v{MISURA_V}|{f}|{int(st.st_mtime)}|{st.st_size}"
-        m = cache.get(key)
-        if m is None:
-            m = misura_sfondo(f)
-            cache[key] = m
-            nuovi += 1
+        m, fresco = _misura_cached(f, cache)
+        nuovi += fresco
         out.append({"path": str(f), "nome": f.stem[:8], **m})
     if nuovi:
         _cache_save(cache)
@@ -790,64 +810,103 @@ def _hex(tinta: float, sat: float, lum: float) -> str:
     return "#%02x%02x%02x" % tuple(int(round(c * 255)) for c in rgb)
 
 
-def pagina(dest: Path, out: Path) -> Path:
-    """Pagina di riferimento: maglietta -> sfondo, con le miniature vere.
+def pagina(dest: Path, out: Path, pieno: bool = False) -> Path:
+    """Pagina di riferimento: maglietta -> posizione nella griglia di macOS.
 
-    Le immagini sono incorporate come data URI: la pagina resta un singolo file
-    che funziona offline e si puo mandare a un collega senza portarsi dietro
-    una cartella di allegati.
+    Le immagini sono incorporate come data URI: resta un file singolo, funziona
+    offline e si manda a un collega senza allegare una cartella.
     """
-    sfondi = leggi_gallery(dest, verbose=False)
+    g = misura_set(griglia(pieno))
+    sorgente = "griglia"
+    if not g:
+        # senza set, ricado sulla gallery di Teams: meglio una pagina utile a
+        # meta che nessuna pagina
+        g = leggi_gallery(dest, verbose=False)
+        sorgente = "teams"
+
+    def cella(mag: dict, modo: str) -> str:
+        sc, _, _ = scegli(mag, g, modo)
+        if sc is None:
+            return '<td class="vuoto">nessuno adatto</td>'
+        img = f'<img src="{_data_uri(Path(sc["path"]))}" alt="">'
+        if sorgente == "griglia":
+            d = dist_tinta(mag["tinta"], sc["tinta"])
+            return (f'<td><div class="slot"><b>{sc["pos"]}</b>{img}</div>'
+                    f'<span>tinta {sc["tinta"]:.0f}° &middot; {d:.0f}° dalla '
+                    f'maglietta</span></td>')
+        d = dist_tinta(mag["tinta"], sc["tinta"])
+        return (f'<td>{img}<span>tinta {sc["tinta"]:.0f}° &middot; {d:.0f}° '
+                f'dalla maglietta</span></td>')
+
     righe = []
     for nome, t, sa, lu in MAGLIETTE_COMUNI:
         mag = {"tinta": float(t), "sat": sa, "lum": lu,
                "croma": _croma_maglietta(t, sa, lu)}
         intestazione = f'<th><i style="background:{_hex(t, sa, lu)}"></i>{nome}</th>'
 
-        # Una maglietta senza tinta non ha una "distanza sulla ruota dei colori":
-        # stampare quel numero sarebbe un dato inventato. Le due colonne
-        # collassano in una, e il criterio dichiarato e quello vero.
+        # Una maglietta senza tinta non ha una "distanza sulla ruota dei
+        # colori": stampare quel numero sarebbe un dato inventato.
         if sa < S_ACROMATICA:
-            sc, _, _ = scegli(mag, sfondi, "tono")
+            sc, _, _ = scegli(mag, g, "tono")
             if sc is None:
                 righe.append(f'<tr>{intestazione}'
                              '<td class="vuoto" colspan="2">nessuno adatto</td></tr>')
             else:
                 d = sc["lum"] - lu
+                slot = (f'<div class="slot"><b>{sc["pos"]}</b>'
+                        if sorgente == "griglia" else '<div class="slot">')
                 righe.append(
-                    f'<tr>{intestazione}<td colspan="2" class="unica">'
-                    f'<img src="{_data_uri(Path(sc["path"]))}" alt="">'
+                    f'<tr>{intestazione}<td colspan="2" class="unica">{slot}'
+                    f'<img src="{_data_uri(Path(sc["path"]))}" alt=""></div>'
                     f'<span>senza tinta: conta lo stacco di luminosita '
                     f'({d:+.2f}), non la ruota dei colori</span></td></tr>')
             continue
 
-        celle = []
-        for modo in ("tono", "contrasto"):
-            sc, _, _ = scegli(mag, sfondi, modo)
-            if sc is None:
-                celle.append('<td class="vuoto">nessuno adatto</td>')
-            else:
-                d = dist_tinta(mag["tinta"], sc["tinta"])
-                celle.append(
-                    f'<td><img src="{_data_uri(Path(sc["path"]))}" alt="">'
-                    f'<span>{sc["tinta"]:.0f}° &middot; {d:.0f}° di distanza</span></td>')
-        righe.append(f'<tr>{intestazione}' + "".join(celle) + "</tr>")
+        righe.append(f'<tr>{intestazione}'
+                     + cella(mag, "tono") + cella(mag, "contrasto") + "</tr>")
+
+    if sorgente == "griglia":
+        strip = "".join(
+            f'<figure><div class="slot"><b>{e["pos"]}</b>'
+            f'<img src="{_data_uri(Path(e["path"]), 200)}" alt=""></div>'
+            f'<figcaption>{e["tinta"]:.0f}°</figcaption></figure>' for e in g)
+        testa = f"""<h1>Quale sfondo con quale maglietta</h1>
+<p class="sub">I numeri sono le <strong>posizioni nella griglia</strong> di
+Centro di Controllo &rarr; effetti video &rarr; Sfondo. Valgono se hai importato
+il set in ordine di nome: controlla qui sotto che l'ordine corrisponda.</p>
+<div class="strip">{strip}</div>"""
+    else:
+        testa = f"""<h1>Quale sfondo con quale maglietta</h1>
+<p class="sub">Generata dai {len(g)} sfondi nella tua gallery Teams. Per avere
+le posizioni della griglia di macOS: <code>teams-tone --init</code> e poi
+<code>teams-tone --pagina</code>.</p>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="it"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sfondi Teams &mdash; quale con quale maglietta</title>
+<title>Sfondi &mdash; quale con quale maglietta</title>
 <style>
  :root {{ color-scheme: light dark; --bg:#fbfaf8; --fg:#1b1b1d; --mut:#6b6b70;
-          --line:#e4e2dd; --card:#fff; }}
+          --line:#e4e2dd; --card:#fff; --acc:#2f6f6a; }}
  @media (prefers-color-scheme: dark) {{ :root {{ --bg:#16161a; --fg:#ececf0;
-          --mut:#9a9aa2; --line:#2c2c33; --card:#1e1e24; }} }}
+          --mut:#9a9aa2; --line:#2c2c33; --card:#1e1e24; --acc:#6fc4bc; }} }}
  * {{ box-sizing:border-box; }}
  body {{ margin:0; padding:32px 16px 64px; background:var(--bg); color:var(--fg);
         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }}
- main {{ max-width:900px; margin:0 auto; }}
+ main {{ max-width:940px; margin:0 auto; }}
  h1 {{ font-size:1.5rem; margin:0 0 6px; letter-spacing:-.01em; }}
- p.sub {{ color:var(--mut); margin:0 0 28px; max-width:60ch; }}
+ p.sub {{ color:var(--mut); margin:0 0 24px; max-width:66ch; }}
+ code {{ font-size:.85em; background:var(--line); padding:1px 5px; border-radius:4px; }}
+ .strip {{ display:flex; gap:10px; flex-wrap:wrap; margin:0 0 30px; }}
+ .strip figure {{ margin:0; width:120px; }}
+ .strip figcaption {{ font-size:.72rem; color:var(--mut); text-align:center;
+                      margin-top:4px; font-variant-numeric:tabular-nums; }}
+ .slot {{ position:relative; }}
+ .slot img {{ display:block; width:100%; border-radius:6px; }}
+ .slot b {{ position:absolute; top:5px; left:5px; z-index:1; min-width:22px;
+            height:22px; padding:0 5px; border-radius:11px; background:var(--acc);
+            color:#fff; font-size:.78rem; font-weight:700; line-height:22px;
+            text-align:center; box-shadow:0 1px 3px rgba(0,0,0,.3); }}
  table {{ width:100%; border-collapse:collapse; background:var(--card);
           border:1px solid var(--line); border-radius:12px; overflow:hidden; }}
  thead th {{ text-align:left; font-size:.75rem; text-transform:uppercase;
@@ -859,32 +918,77 @@ def pagina(dest: Path, out: Path) -> Path:
                margin-right:9px; vertical-align:-3px;
                box-shadow:inset 0 0 0 1px rgba(0,0,0,.14); }}
  td {{ padding:10px 16px; border-bottom:1px solid var(--line); vertical-align:middle; }}
- td img {{ display:block; width:100%; max-width:200px; border-radius:6px; }}
+ td .slot, td img {{ max-width:190px; }}
  td span {{ display:block; margin-top:5px; font-size:.75rem; color:var(--mut);
             font-variant-numeric:tabular-nums; }}
  td.vuoto {{ color:var(--mut); font-size:.85rem; }}
- td.unica img {{ max-width:200px; }}
  tbody tr:last-child th, tbody tr:last-child td {{ border-bottom:0; }}
- footer {{ margin-top:24px; color:var(--mut); font-size:.8rem; max-width:64ch; }}
- code {{ font-size:.85em; background:var(--line); padding:1px 5px; border-radius:4px; }}
+ footer {{ margin-top:24px; color:var(--mut); font-size:.8rem; max-width:66ch; }}
 </style></head><body><main>
-<h1>Quale sfondo con quale maglietta</h1>
-<p class="sub">Generata dai {len(sfondi)} sfondi presenti nella tua gallery Teams.
-<strong>Armonia morbida</strong> tiene lo sfondo a circa {D_TONO:.0f}° dalla maglietta
-sulla ruota dei colori; <strong>contrasto</strong> va sul colore opposto, a
-{D_CONTRASTO:.0f}°. Sotto {D_MIMETISMO:.0f}° lo sfondo viene scartato: ti mimetizzi.</p>
+{testa}
 <table>
 <thead><tr><th>Maglietta</th><th>Armonia morbida</th><th>Contrasto</th></tr></thead>
 <tbody>
 {chr(10).join(righe)}
 </tbody></table>
-<footer>I valori delle magliette sono tipici di quei capi sotto luce d'ufficio,
-non misure di un campione reale: servono a costruire la tabella. Per la maglietta
-che hai addosso adesso, misurata davvero, lancia <code>teams-tone</code>.</footer>
+<footer>Armonia morbida tiene lo sfondo a circa {D_TONO:.0f}&deg; dalla maglietta
+sulla ruota dei colori, contrasto va sul colore opposto a {D_CONTRASTO:.0f}&deg;;
+sotto {D_MIMETISMO:.0f}&deg; lo sfondo viene scartato perche ti mimetizzi.
+I valori delle magliette sono tipici di quei capi sotto luce d'ufficio, non
+misure di un campione reale: servono a costruire la tabella. Per la maglietta che
+hai addosso adesso, misurata davvero, lancia <code>teams-tone</code>.</footer>
 </main></body></html>"""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     return out
+
+
+def pulisci(si: bool = False) -> int:
+    """Cancella dalla cartella di uscita solo cio che ha creato questo tool.
+
+    Il filtro e sui nomi che il tool produce, non su tutta la cartella: in
+    Pictures ci sono le foto di qualcuno, e una cancellazione ricorsiva la
+    prima volta che si sbaglia un percorso non si annulla.
+    """
+    d = cartella_uscita()
+    if not d.is_dir():
+        print(f"\n  {d} non esiste: niente da pulire\n")
+        return 0
+
+    files = sorted(set(list(d.glob("teams-tone-*.png")) + list(d.glob("sfondo-attuale.png"))))
+    if not files:
+        print(f"\n  niente da pulire in {d}\n")
+        return 0
+
+    tot = sum(f.stat().st_size for f in files)
+    print(f"\n  {len(files)} file in {d}  ({tot / 1e6:.1f} MB)")
+    for f in files:
+        print(f"    {f.name}")
+
+    if not si:
+        if not sys.stdin.isatty():
+            print("\n  non interattivo: ripeti con --si per confermare\n")
+            return 0
+        try:
+            risposta = input("\n  cancello? [s/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if risposta not in ("s", "si", "sì", "y", "yes"):
+            print("  lasciati dove sono\n")
+            return 0
+
+    n = 0
+    for f in files:
+        try:
+            f.unlink()
+            n += 1
+        except OSError as exc:
+            print(f"    {f.name}: {exc}", file=sys.stderr)
+    print(f"\n  cancellati {n} file")
+    print("  Le copie che macOS si e gia importato nella griglia restano:")
+    print("  quelle si togliono da Centro di Controllo > effetti video > Sfondo.\n")
+    return n
 
 
 # --------------------------------------------------------------------------- #
@@ -905,6 +1009,10 @@ def main() -> None:
                     help="pagina HTML: quale sfondo con quale maglietta")
     ap.add_argument("--master", metavar="FOTO",
                     help="imposta l'immagine di base da cui generare")
+    ap.add_argument("--delete", action="store_true",
+                    help="cancella gli sfondi che il tool ha creato in Pictures")
+    ap.add_argument("--si", action="store_true",
+                    help="con --delete, non chiedere conferma")
     ap.add_argument("--anche-teams", action="store_true", dest="anche_teams",
                     help="con --init, installa il set anche nella gallery Teams")
     ap.add_argument("--griglia", action="store_true",
@@ -922,6 +1030,10 @@ def main() -> None:
     ap.add_argument("--top", type=int, default=5, help="quante alternative mostrare (con --dai-miei)")
     ap.add_argument("--no-open", action="store_true", help="non aprire l'immagine dello sfondo")
     args = ap.parse_args()
+
+    if args.delete:
+        pulisci(args.si)
+        return
 
     if args.out:
         d = Path(args.out).expanduser()
@@ -968,7 +1080,8 @@ def main() -> None:
         return
 
     if args.pagina:
-        out = pagina(dest, Path.home() / ".cache/teams-tone/sfondi.html")
+        out = pagina(dest, Path.home() / ".cache/teams-tone/sfondi.html",
+                     pieno=args.pieno)
         print(f"\n  pagina: {out}\n")
         if not args.no_open:
             apri(out)
