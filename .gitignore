@@ -13,3 +13,6 @@ __pycache__/
 venv/
 .venv/
 .DS_Store
+
+# file che l app salva accanto al progetto, non parte del repo
+Claude outputs/
