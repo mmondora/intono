@@ -418,6 +418,32 @@ def scegli(maglietta: dict, sfondi: list[dict], mode: str):
     return (cl[0][0] if cl and cl[0][1] > -1e5 else None), eff, cl
 
 
+def griglia(pieno: bool = False) -> list[dict]:
+    """Il set di base cosi come sta nella griglia di macOS.
+
+    macOS si COPIA l'immagine quando la selezioni: non rilegge il file, ne a
+    runtime ne al riavvio dell'app (verificato). Quindi rigenerare non cambia
+    niente e l'unico modo e importare il set una volta sola e poi cliccare.
+    L'ordine della griglia e l'ordine di importazione: importando in ordine di
+    nome, e ordinato per tinta, quindi la posizione e calcolabile.
+    """
+    suffisso = "pieno" if pieno else "pastello"
+    out = []
+    for f in sorted(cartella_uscita().glob(f"teams-tone-*-{suffisso}.png")):
+        pezzi = f.stem.split("-")
+        if len(pezzi) < 4 or not pezzi[2].isdigit():
+            continue
+        out.append({"path": str(f), "tinta": float(pezzi[2]), "file": f.name})
+    return out
+
+
+def posizione(tinta_target: float, g: list[dict]) -> tuple[int, dict, float]:
+    """Indice 1-based nella griglia della tinta piu vicina, piu lo scarto."""
+    dist = [dist_tinta(tinta_target, e["tinta"]) for e in g]
+    i = int(np.argmin(dist))
+    return i + 1, g[i], dist[i]
+
+
 def bersaglio(maglietta: dict, mode: str) -> tuple[float, str]:
     """Tinta da generare e modalita effettiva, senza guardare la gallery.
 
@@ -867,6 +893,10 @@ def main() -> None:
                     help="pagina HTML: quale sfondo con quale maglietta")
     ap.add_argument("--master", metavar="FOTO",
                     help="imposta l'immagine di base da cui generare")
+    ap.add_argument("--griglia", action="store_true",
+                    help="elenca il set nell'ordine in cui importarlo in macOS")
+    ap.add_argument("--genera", action="store_true",
+                    help="genera un nuovo sfondo invece di indicare la griglia")
     ap.add_argument("--versione", action="version",
                     version=f"teams-tone {VERSIONE}")
     ap.add_argument("--out", metavar="DIR",
@@ -896,6 +926,20 @@ def main() -> None:
         salva_config(cfg)
         print(f"\n  immagine di base: {mp}")
         print(f"  tinta misurata: {master_tinta():.0f}°\n")
+        return
+
+    if args.griglia:
+        g = griglia(args.pieno)
+        if not g:
+            raise SystemExit(
+                f"\nNessun set in {cartella_uscita()}\n"
+                "Generalo con: teams-tone --init\n")
+        print(f"\n  {len(g)} sfondi in {cartella_uscita()}")
+        print("  Importali in QUESTO ordine in Centro di Controllo > effetti")
+        print("  video > Sfondo > +, cosi la posizione corrisponde alla tinta.\n")
+        for i, e in enumerate(g, 1):
+            print(f"  {i:2d}.  tinta {e['tinta']:3.0f}°   {e['file']}")
+        print()
         return
 
     dest = cartella_teams(args.teams_dir)
@@ -955,6 +999,21 @@ def main() -> None:
         tinta_target, eff = bersaglio(mag, args.mode)
         etichetta = {"contrasto": "colore opposto", "tono": "armonia morbida",
                      "neutro": "maglietta senza tinta, resto sul brand"}[eff]
+
+        g = griglia(args.pieno)
+        if g and not args.genera:
+            # Il set e gia importato: generare un nono file non serve a niente,
+            # perche per usarlo andrebbe importato di nuovo. Dico quale cliccare.
+            i, e, scarto = posizione(tinta_target, g)
+            print(f"  {etichetta}: tinta ideale {tinta_target:.0f}°\n")
+            print(f"  griglia macOS: posizione {i} di {len(g)}"
+                  f"   (tinta {e['tinta']:.0f}°, {scarto:.0f}° dall'ideale)")
+            print(f"  vale per Teams, Zoom, Meet: e lo sfondo di sistema\n")
+            print(f"  {e['path']}")
+            if not args.no_open:
+                apri(Path(e["path"]))
+            return
+
         print(f"  {etichetta}: genero a {tinta_target:.0f}°")
         path, riusato, copia = genera(tinta_target, mag["lum"], dest,
                                       pieno=args.pieno)

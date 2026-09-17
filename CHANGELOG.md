@@ -7,6 +7,22 @@ copia stai eseguendo.
 
 Da alzare a ogni cambiamento che tocchi il comportamento.
 
+## 0.8.0
+
+- **La griglia di macOS.** Verificato che macOS si copia l'immagine quando la
+  selezioni e non rilegge il file, ne a runtime ne al riavvio dell'app: nessun
+  symlink, alias o sovrascrittura puo aggirarlo. Quindi rigenerare a ogni
+  maglietta non serve, e il set va importato una volta sola.
+- `--griglia` elenca il set nell'ordine in cui importarlo in Centro di Controllo
+  → effetti video → Sfondo → +. Importando in ordine di nome la griglia risulta
+  ordinata per tinta, quindi la posizione e calcolabile.
+- Se il set esiste, il comando dice **quale posizione cliccare** invece di
+  generare un nono file che andrebbe reimportato per essere usato. Immediato,
+  perche non genera niente. `--genera` forza la generazione di uno esatto.
+- Lo sfondo di sistema vale per Teams, Zoom e Meet insieme: un click, tutte le
+  app. Richiede macOS 15+ su Apple silicon e una camera Apple (le webcam USB di
+  terze parti non hanno la voce).
+
 ## 0.7.0
 
 - `sfondo-attuale.png`, sempre allo stesso percorso nella cartella di uscita.

@@ -62,6 +62,8 @@ On first run macOS asks for camera access. Grant it to your terminal, or to the
 | `teams-tone --sheet` | numbered contact sheet of every background you have |
 | `teams-tone --aggiungi FILE` | add an image to the Teams gallery |
 | `teams-tone --image FILE` | use a photo instead of the webcam |
+| `teams-tone --griglia` | list the set in the order to import it into macOS |
+| `teams-tone --genera` | generate a fresh background instead of naming a slot |
 | `teams-tone --versione` | which installed version you are running |
 
 ## The rule
@@ -130,6 +132,26 @@ no other application can reasonably use it. So every generated image is also
 written to `~/Pictures/teams-tone/` under a name that says what it is
 (`teams-tone-080-pastello.png`: hue and rendering), where any file picker can
 reach it: Zoom, Meet, a slide deck, a wallpaper. `--out DIR` moves that folder.
+
+## The macOS system background
+
+macOS 15+ on Apple silicon replaces the background at the camera layer, for
+every application at once — Teams, Zoom, Meet — and the choice persists across
+apps. That is the right layer for this, and it is where this tool now points.
+
+It is still a click, and no trick avoids it: macOS **copies** the image when you
+select it. It does not re-read the file, at runtime or on app restart (tested),
+so a symlink, an alias or overwriting the path changes nothing.
+
+What does help is that copying makes the set stable. Run `--init` once to
+generate eight hues, `--griglia` to see the order, and import them once into
+Control Center → video effects → Background → +. From then on the tool computes
+the ideal hue and tells you **which slot to click** — importing in filename
+order makes the grid hue-ordered, so the position is derivable. Nothing is
+generated, so it answers instantly.
+
+Note that third-party USB webcams do not offer the feature; it needs an Apple
+camera, the Studio Display, or an iPhone as Continuity Camera.
 
 ## What it does not do
 
