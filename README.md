@@ -17,6 +17,9 @@ $ teams-tone
   sfondo: 48dcce38-b4d8-598a-b0ca-9f8446638ff7.png
   tinta 76°   luminosita 0.43
   /Users/you/Library/Containers/com.microsoft.teams2/.../Uploads/48dcce38-....png
+
+  copia riusabile (Zoom, Meet, Slides, qualunque cosa):
+  /Users/you/Pictures/teams-tone/teams-tone-080-pastello.png
   Riavvia Teams, poi: Effects and avatars > Sfondi.
 ```
 
@@ -54,6 +57,8 @@ On first run macOS asks for camera access. Grant it to your terminal, or to the
 | `teams-tone --pagina` | single-file HTML page: which background for which shirt |
 | `teams-tone --master FILE` | set the base image new backgrounds are derived from |
 | `teams-tone --mode tono\|contrasto` | force soft harmony or complementary |
+| `teams-tone --pieno` | punchier rendering instead of the pastel default |
+| `teams-tone --out DIR` | where to keep the reusable copies |
 | `teams-tone --sheet` | numbered contact sheet of every background you have |
 | `teams-tone --aggiungi FILE` | add an image to the Teams gallery |
 | `teams-tone --image FILE` | use a photo instead of the webcam |
@@ -84,11 +89,20 @@ at the same HSV saturation have very different visual intensity — 68 against 2
 in C\*. Using HSV for intensity harmony makes the tool pick garish colours while
 believing they are as muted as everything else.
 
-**Generated backgrounds are normalised on luminance, not on HSV value.** Rec.709
-weights green at 0.71, so one value rendered on a yellow-green hue gives acid
-lime and on a blue gives midnight. Targeting a luminance found by bisection
-keeps results consistent across hues and makes the separation from the shirt true
-by construction rather than checked and rejected afterwards.
+**Generated backgrounds are bisected on luminance and chroma, not set with HSV
+multipliers.** Rec.709 weights green at 0.71, so one HSV value rendered on a
+yellow-green hue gives acid lime and on a blue gives midnight; likewise a
+magenta at the same HSV saturation as an olive has far higher perceived chroma.
+Both axes are therefore solved for a target — median luminance and median
+CIELab C\* — so "pastel" means the same thing at every hue, and the separation
+from the shirt is true by construction rather than checked and rejected
+afterwards.
+
+**The lightness range is compressed, not just gamma-corrected.** A gamma moves
+the midtones but leaves the base image's light source almost white, which is
+what makes a recolour look blown out. Normalising the value channel and mapping
+it into a narrow band removes both the clipped highlight and the crushed shadow
+— low chroma plus low contrast is what actually reads as pastel.
 
 **`--init` fills gaps instead of generating a set.** It divides the colour wheel
 into eight sectors from your base image's hue and generates only the sectors you
@@ -107,6 +121,14 @@ other behaviour when you want it.
 deterministic `uuid5` names, so re-running overwrites instead of accumulating,
 and an image already in the gallery is detected by hash and never duplicated.
 Cleanup only ever touches entries this tool created.
+
+## Reusable copies
+
+Inside the Teams folder a generated background is a UUID in a hidden container —
+no other application can reasonably use it. So every generated image is also
+written to `~/Pictures/teams-tone/` under a name that says what it is
+(`teams-tone-080-pastello.png`: hue and rendering), where any file picker can
+reach it: Zoom, Meet, a slide deck, a wallpaper. `--out DIR` moves that folder.
 
 ## What it does not do
 

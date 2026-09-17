@@ -480,6 +480,20 @@ PASSO_RUOTA = 45.0       # spaziatura del set di base sulla ruota dei colori
 TOLLERANZA_COPERTURA = 22.0   # sotto questa distanza la tinta e gia coperta
 
 
+def cartella_uscita() -> Path:
+    """Dove depositare una copia riusabile fuori da Teams.
+
+    Dentro la cartella di Teams il file ha un nome UUID e sta in un container
+    nascosto: inutilizzabile da qualunque altro strumento. La copia va in un
+    posto che il selettore file di qualsiasi app raggiunge, con un nome che dice
+    cosa contiene.
+    """
+    cfg = carica_config()
+    if cfg.get("uscita"):
+        return Path(cfg["uscita"]).expanduser()
+    return Path.home() / "Pictures" / "teams-tone"
+
+
 def master_path() -> Path:
     """Il master e configurabile: ognuno parte dalla sua immagine."""
     cfg = carica_config()
@@ -531,7 +545,7 @@ def _hsv_to_rgb(hsv: np.ndarray) -> np.ndarray:
 
 
 def genera(tinta_target: float, lum_maglietta: float, dest: Path,
-           pieno: bool = False) -> tuple[Path, bool]:
+           pieno: bool = False) -> tuple[Path, bool, Path | None]:
     """Rimappa il master TeamSystem sulla tinta richiesta.
 
     La luminosita viene spinta finche lo stacco dalla maglietta supera la
@@ -617,7 +631,17 @@ def genera(tinta_target: float, lum_maglietta: float, dest: Path,
     im = Image.open(tmp).convert("RGB")
     im.save(main)
     im.resize(THUMB, Image.LANCZOS).save(dest / f"{uid}_thumb{ext}")
-    return main, gia
+
+    # copia riusabile, con nome parlante
+    copia = (cartella_uscita()
+             / f"teams-tone-{bucket:03d}-{'pieno' if pieno else 'pastello'}.png")
+    try:
+        copia.parent.mkdir(parents=True, exist_ok=True)
+        im.save(copia)
+    except OSError as exc:
+        print(f"  (copia in {copia.parent} non riuscita: {exc})", file=sys.stderr)
+        copia = None
+    return main, gia, copia
 
 
 def aggiungi(img: Path, dest: Path) -> tuple[Path, bool]:
@@ -687,7 +711,7 @@ def init_set(dest: Path, passo: float = PASSO_RUOTA,
             continue
         # luminanza di riferimento 0.5: il set di base non e legato a una
         # maglietta specifica, la scelta fine la fa la regola al momento dell'uso
-        path, riusato = genera(t, 0.5, dest, pieno=pieno)
+        path, riusato, _ = genera(t, 0.5, dest, pieno=pieno)
         hue_esistenti.append(misura_sfondo(path)["tinta"])
         fatti.append(path)
         print(f"  {t:5.0f}°  {'aggiornata' if riusato else 'generata'}: {path.name}")
@@ -834,6 +858,8 @@ def main() -> None:
                     help="pagina HTML: quale sfondo con quale maglietta")
     ap.add_argument("--master", metavar="FOTO",
                     help="imposta l'immagine di base da cui generare")
+    ap.add_argument("--out", metavar="DIR",
+                    help="cartella dove depositare la copia riusabile")
     ap.add_argument("--pieno", action="store_true",
                     help="resa piu carica e contrastata invece che pastello")
     ap.add_argument("--dai-miei", action="store_true", dest="dai_miei",
@@ -841,6 +867,13 @@ def main() -> None:
     ap.add_argument("--top", type=int, default=5, help="quante alternative mostrare (con --dai-miei)")
     ap.add_argument("--no-open", action="store_true", help="non aprire l'immagine dello sfondo")
     args = ap.parse_args()
+
+    if args.out:
+        d = Path(args.out).expanduser()
+        d.mkdir(parents=True, exist_ok=True)
+        cfg = carica_config(); cfg["uscita"] = str(d); salva_config(cfg)
+        print(f"\n  copie riusabili in: {d}\n")
+        return
 
     if args.master:
         mp = Path(args.master).expanduser().resolve()
@@ -891,7 +924,7 @@ def main() -> None:
     print(f"  maglietta: tinta {mag['tinta']:.0f}°  "
           f"intensita {mag['sat']:.2f}  luminosita {mag['lum']:.2f}")
 
-    scelto, generato = None, False
+    scelto, generato, copia = None, False, None
 
     if args.dai_miei:
         # Scegliere tra gli sfondi gia in gallery e l'eccezione, non la regola:
@@ -912,7 +945,8 @@ def main() -> None:
         etichetta = {"contrasto": "colore opposto", "tono": "armonia morbida",
                      "neutro": "maglietta senza tinta, resto sul brand"}[eff]
         print(f"  {etichetta}: genero a {tinta_target:.0f}°")
-        path, riusato = genera(tinta_target, mag["lum"], dest, pieno=args.pieno)
+        path, riusato, copia = genera(tinta_target, mag["lum"], dest,
+                                      pieno=args.pieno)
         scelto = {"path": str(path), "nome": path.stem[:8], **misura_sfondo(path)}
         generato = True
         if riusato:
@@ -922,6 +956,9 @@ def main() -> None:
     print(f"\n  sfondo: {out.name}")
     print(f"  tinta {scelto['tinta']:.0f}°   luminosita {scelto['lum']:.2f}")
     print(f"  {out}")
+    if copia is not None:
+        print(f"\n  copia riusabile (Zoom, Meet, Slides, qualunque cosa):")
+        print(f"  {copia}")
     if generato:
         print("  Riavvia Teams, poi: Effects and avatars > Sfondi.\n")
     else:

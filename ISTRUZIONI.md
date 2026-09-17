@@ -31,6 +31,15 @@ Altre opzioni: `--mode tono|contrasto` per forzare il criterio, `--sheet` per un
 sfondi, `--aggiungi FILE` per metterne uno in gallery, `--image FOTO` per provare
 senza webcam.
 
+## Le copie riusabili
+
+Ogni sfondo generato viene scritto **due volte**: nella cartella di Teams con il
+nome UUID che Teams pretende, e in `~/Pictures/teams-tone/` con un nome
+leggibile tipo `teams-tone-080-pastello.png` (tinta e resa). La seconda serve
+perché dentro il container di Teams quel file non lo raggiunge nessun altro
+programma: da Pictures lo usi in Zoom, Meet, una slide, o come sfondo del
+desktop. Con `teams-tone --out CARTELLA` la sposti dove vuoi.
+
 ## L'immagine di partenza
 
 Nello zip c'è `master.png`, lo sfondo TeamSystem arancione, e l'installer la copia
