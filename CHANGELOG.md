@@ -7,6 +7,22 @@ copia stai eseguendo.
 
 Da alzare a ogni cambiamento che tocchi il comportamento.
 
+## 1.0.5
+
+- **Maglietta grigia letta come colorata.** Due cause, viste con `--debug`
+  sulla webcam reale:
+  - la soglia "senza tinta" usava solo la saturazione HSV, che su un grigio
+    scuro si gonfia: 0.14-0.16, a cavallo di 0.15, quindi un lancio su due
+    proponeva un verde pastello. Ora conta anche la croma Lab: sotto 10 la
+    maglietta e senza tinta (grigio misurato: 6; beige: 13.5).
+  - la zona sotto il mento introdotta nella 1.0.4 prende il collo, e su un
+    grigio la pelle e l'unica cosa satura: vinceva la tinta. Ora i pixel
+    color pelle si tolgono quando sono una minoranza della zona; se sono la
+    maggioranza (salmone, beige) restano.
+- `--debug`: salva il fotogramma con la zona misurata in
+  `~/.cache/intono/debug.jpg` e stampa saturazione, croma e quota di pelle.
+- `tests/test_maglietta.py`.
+
 ## 1.0.4
 
 - **"Volto non trovato" anche con il volto in quadro.** Due cause, viste con

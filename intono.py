@@ -21,7 +21,7 @@ Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
 
 from __future__ import annotations
 
-VERSIONE = "1.0.4"   # unica fonte: install.sh la legge da qui
+VERSIONE = "1.0.5"   # unica fonte: install.sh la legge da qui
 NOME = "intono"      # usato nei nomi dei file generati
 
 import argparse
@@ -46,6 +46,12 @@ from PIL import Image, ImageDraw
 # Tutte le soglie sono qui, in chiaro, modificabili.
 # --------------------------------------------------------------------------- #
 S_ACROMATICA = 0.15      # sotto: maglietta bianca/grigia/nera
+CROMA_ACROMATICA = 10.0  # sotto: maglietta senza tinta anche se l'HSV dice altro
+# La saturazione HSV su un grigio scuro si gonfia (e (max-min)/max, e max e
+# piccolo): una maglietta grigia sotto luce calda misurava 0.14-0.16, a
+# cavallo della soglia, e un lancio su due diventava "colorata". La croma Lab
+# della stessa maglietta era 6; il beige, il colore vero piu tenue tra quelli
+# comuni, sta a 13.5.
 S_ACCESA = 0.35          # sopra: tinta piena, conviene il contrasto
 D_MIMETISMO = 25.0       # sotto: sfondo troppo simile alla maglietta, ti mimetizzi
 D_TONO = 70.0            # armonia morbida: distanza sulla ruota dei colori
@@ -216,6 +222,35 @@ def misura(rgb: np.ndarray) -> dict:
     return {"tinta": round(tinta, 1), "sat": round(sat, 3), "lum": round(lum, 3),
             "croma": round(croma, 1), "coerenza": round(coerenza, 3),
             "confusione": round(confusione, 4), "neutra": neutra, "usabile": usabile}
+
+
+def acromatica(m: dict) -> bool:
+    """Maglietta bianca, grigia o nera: la ruota dei colori non dice niente."""
+    return m["sat"] < S_ACROMATICA or m.get("croma", 99.0) < CROMA_ACROMATICA
+
+
+def _maschera_pelle(a: np.ndarray) -> np.ndarray:
+    """Pixel con tinta, saturazione e luminosita da pelle (N x 3, uint8)."""
+    hsv = _hsv(a.astype(np.float32) / 255.0)
+    deg = hsv[:, 0] * 360.0
+    return (((deg <= 50) | (deg >= 340)) & (hsv[:, 1] > 0.18)
+            & (hsv[:, 1] < 0.7) & (hsv[:, 2] > 0.25))
+
+
+def misura_maglietta(roi: np.ndarray) -> dict:
+    """Misura la maglietta togliendo il collo, se e una minoranza della zona.
+
+    Con il volto vicino alla camera la zona parte subito sotto il mento e
+    prende il collo: su una maglietta grigia i pixel di pelle sono gli unici
+    saturi, vincono la moda della tinta e la maglietta "diventa" rossa. Se la
+    pelle e la MAGGIORANZA invece la tengo: e una maglietta salmone o beige,
+    e togliendola misurerei il nulla.
+    """
+    a = roi.reshape(-1, 3)
+    pelle = _maschera_pelle(a)
+    if 0 < pelle.mean() < 0.5 and (~pelle).sum() > 200:
+        a = a[~pelle]
+    return misura(a.reshape(1, -1, 3))
 
 
 def misura_sfondo(path: Path) -> dict:
@@ -411,6 +446,9 @@ def _busto(h: int, w: int, faccia) -> tuple[int, int, int, int] | None:
     return None
 
 
+ULTIMA_ZONA: dict = {}   # per --debug: fotogramma, rettangolo misurato, volto
+
+
 def zona_busto(frames) -> tuple[np.ndarray, str]:
     """Zona della maglietta: sotto il volto piu grande visto nei frame."""
     if isinstance(frames, np.ndarray):
@@ -442,6 +480,7 @@ def zona_busto(frames) -> tuple[np.ndarray, str]:
                 r = _busto(fr.shape[0], fr.shape[1], f)
                 if r is not None:
                     x0, y0, x1, y1 = r
+                    ULTIMA_ZONA.update(frame=fr, rett=r, volto=f)
                     return fr[y0:y1, x0:x1], "volto trovato, guardo il busto sotto"
                 vicino = True
         except Exception as exc:
@@ -449,7 +488,38 @@ def zona_busto(frames) -> tuple[np.ndarray, str]:
     nota = ("volto troppo vicino, la maglietta e fuori quadro: "
             "guardo la fascia bassa centrale" if vicino
             else "volto non trovato, guardo la fascia bassa centrale")
-    return rgb[int(0.58 * h):int(0.95 * h), int(0.28 * w):int(0.72 * w)], nota
+    r = (int(0.28 * w), int(0.58 * h), int(0.72 * w), int(0.95 * h))
+    ULTIMA_ZONA.update(frame=rgb, rett=r, volto=None)
+    return rgb[r[1]:r[3], r[0]:r[2]], nota
+
+
+def debug_zona(roi: np.ndarray, out: Path) -> None:
+    """Salva il fotogramma con la zona misurata e stampa di cosa e fatta."""
+    fr, (x0, y0, x1, y1), volto = (ULTIMA_ZONA["frame"], ULTIMA_ZONA["rett"],
+                                   ULTIMA_ZONA["volto"])
+    im = Image.fromarray(fr)
+    d = ImageDraw.Draw(im)
+    d.rectangle([x0, y0, x1, y1], outline=(0, 255, 0), width=6)
+    if volto is not None:
+        fx, fy, fw, fh = volto
+        d.rectangle([fx, fy, fx + fw, fy + fh], outline=(255, 0, 255), width=6)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    im.save(out, quality=85)
+    a = roi.reshape(-1, 3)
+    hsv = _hsv(a.astype(np.float32) / 255.0)
+    cr = _croma_lab(a)
+    pelle = _maschera_pelle(a)
+    print(f"\n  [debug] zona {x1 - x0}x{y1 - y0} px a y {y0}-{y1} "
+          f"(fotogramma {fr.shape[1]}x{fr.shape[0]})")
+    print(f"  [debug] saturazione HSV  p25 {np.percentile(hsv[:, 1], 25):.2f}  "
+          f"mediana {np.median(hsv[:, 1]):.2f}  p75 {np.percentile(hsv[:, 1], 75):.2f}")
+    print(f"  [debug] croma Lab        p25 {np.percentile(cr, 25):.1f}  "
+          f"mediana {np.median(cr):.1f}  p75 {np.percentile(cr, 75):.1f}")
+    print(f"  [debug] pixel color pelle: {100 * pelle.mean():.0f}%   "
+          f"per riga (alto->basso): " + " ".join(
+              f"{100 * pelle.reshape(roi.shape[:2])[i:i + max(1, roi.shape[0] // 8)].mean():.0f}"
+              for i in range(0, roi.shape[0], max(1, roi.shape[0] // 8)))[:200])
+    print(f"  [debug] immagine: {out}  (verde = zona misurata, viola = volto)")
 
 
 # --------------------------------------------------------------------------- #
@@ -460,7 +530,7 @@ def scegli(maglietta: dict, sfondi: list[dict], mode: str):
     if not sfondi:
         return None, mode, []
 
-    if maglietta["sat"] < S_ACROMATICA:
+    if acromatica(maglietta):
         # Senza tinta la ruota dei colori non dice niente, ma la LUMINOSITA si:
         # una maglietta nera vuole uno sfondo chiaro e una bianca uno piu scuro,
         # altrimenti il soggetto non stacca. Senza questa regola bianca e nera
@@ -550,7 +620,7 @@ def bersaglio(maglietta: dict, mode: str) -> tuple[float, str]:
     sulla tinta del master (il brand) e lascio che sia la luminanza a creare lo
     stacco, cosa che genera() garantisce per costruzione.
     """
-    if maglietta["sat"] < S_ACROMATICA:
+    if acromatica(maglietta):
         return master_tinta(), "neutro"
     eff = mode if mode != "auto" else (
         "contrasto" if maglietta["sat"] >= S_ACCESA else "tono")
@@ -936,7 +1006,7 @@ def pagina(dest: Path | None, out: Path, pieno: bool = False) -> Path:
 
         # Una maglietta senza tinta non ha una "distanza sulla ruota dei
         # colori": stampare quel numero sarebbe un dato inventato.
-        if sa < S_ACROMATICA:
+        if acromatica(mag):
             sc, _, _ = scegli(mag, g, "tono")
             if sc is None:
                 righe.append(f'<tr>{intestazione}'
@@ -1119,6 +1189,8 @@ def main() -> None:
     ap.add_argument("--dai-miei", action="store_true", dest="dai_miei",
                     help="scegli tra gli sfondi che hai gia, invece di generarne uno")
     ap.add_argument("--top", type=int, default=5, help="quante alternative mostrare (con --dai-miei)")
+    ap.add_argument("--debug", action="store_true",
+                    help="salva il fotogramma con la zona misurata e ne stampa i dati")
     ap.add_argument("--no-open", action="store_true", help="non aprire l'immagine dello sfondo")
     args = ap.parse_args()
 
@@ -1218,7 +1290,9 @@ def main() -> None:
     frames = ([np.asarray(Image.open(args.image).convert("RGB"))]
               if args.image else scatta())
     roi, come = zona_busto(frames)
-    mag = misura(roi)
+    mag = misura_maglietta(roi)
+    if args.debug:
+        debug_zona(roi, Path.home() / ".cache/intono/debug.jpg")
 
     print(f"\n  {come}")
     print(f"  maglietta: tinta {mag['tinta']:.0f}°  "
