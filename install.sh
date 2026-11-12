@@ -10,6 +10,7 @@ BIN="$HOME/.local/bin"
 
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
+say()  { printf '      %s\n' "$*"; }
 
 if [[ "${1:-}" == "--uninstall" ]]; then
   rm -rf "$APP"; rm -f "$BIN/intono" "$HOME/Desktop/Intono.command"
@@ -42,15 +43,23 @@ VER="$(sed -n 's/^VERSIONE = "\(.*\)".*/\1/p' "$SRC/intono.py" | head -1)"
 [[ -n "$VER" ]] || VER="sconosciuta"
 PREC="$(cat "$APP/VERSION" 2>/dev/null || true)"
 
-# L'immagine di base: la tua se c'e, altrimenti l'esempio neutro del repo.
+# L'immagine di base: la tua se c'e nel repo; altrimenti tengo quella gia
+# installata; solo alla prima installazione uso l'esempio neutro. Prima
+# l'esempio sovrascriveva sempre il master installato: reinstallare da un
+# clone pulito cancellava l'immagine di base personale.
 MASTER=""
-[[ -e "$SRC/master.png" ]] && MASTER="$SRC/master.png"
-[[ -z "$MASTER" && -e "$SRC/examples/master-example.png" ]] && MASTER="$SRC/examples/master-example.png"
+if [[ -e "$SRC/master.png" ]]; then
+  MASTER="$SRC/master.png"
+elif [[ -e "$APP/master.png" ]]; then
+  MASTER="keep"
+elif [[ -e "$SRC/examples/master-example.png" ]]; then
+  MASTER="$SRC/examples/master-example.png"
+fi
 [[ -n "$MASTER" ]] || { warn "nessuna immagine di base trovata (master.png o examples/master-example.png)"; exit 1; }
 
 mkdir -p "$APP" "$BIN"
 cp "$SRC/intono.py" "$APP/"
-cp "$MASTER" "$APP/master.png"
+[[ "$MASTER" == keep ]] || cp "$MASTER" "$APP/master.png"
 printf '%s\n' "$VER" > "$APP/VERSION"
 if [[ -n "$PREC" && "$PREC" != "$VER" ]]; then
   ok "intono $VER  (aggiornato da $PREC)"
@@ -65,7 +74,8 @@ ok "copiato in $APP"
 [[ -x "$APP/venv/bin/python" ]] || python3 -m venv "$APP/venv"
 "$APP/venv/bin/python" -m pip install -q --upgrade pip
 echo "  installo numpy, pillow, opencv-python (un minuto)..."
-"$APP/venv/bin/python" -m pip install -q numpy pillow opencv-python
+# opencv < 5: la 5 ha tolto CascadeClassifier e il volto non si trova piu.
+"$APP/venv/bin/python" -m pip install -q numpy pillow "opencv-python>=4.8,<5"
 ok "dipendenze pronte"
 
 cat > "$BIN/intono" <<EOF

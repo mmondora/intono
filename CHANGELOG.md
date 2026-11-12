@@ -7,6 +7,27 @@ copia stai eseguendo.
 
 Da alzare a ogni cambiamento che tocchi il comportamento.
 
+## 1.0.3
+
+- **Il volto non veniva mai trovato.** `install.sh` installava `opencv-python`
+  senza vincoli e pip ha preso la 5.0, che non ha piu `CascadeClassifier`.
+  L'errore finiva in un `except` muto: a ogni scatto "volto non trovato" e la
+  misura cadeva su una fascia fissa dell'inquadratura (tavolo, pelle, sfondo),
+  quindi la stessa maglietta dava tinte diverse a ogni lancio. Ora
+  `install.sh` installa `opencv-python>=4.8,<5` e, se il rilevatore manca, il
+  tool lo dice invece di tacere.
+- **Fallback ffmpeg rotto.** Quando OpenCV non apre la camera (per esempio
+  perche e occupata da una call) si passava a ffmpeg, che falliva con
+  `Selected pixel format (yuv420p) is not supported`. Ora chiede `nv12`.
+- **`--sheet` non faceva niente**: l'opzione c'era ma nessuno la leggeva, e il
+  tool partiva con la webcam. Ora scrive la tavola numerata della gallery
+  Teams in `~/.cache/intono/tavola.png`.
+- **`install.sh` cancellava l'immagine di base personale**: reinstallando da un
+  clone senza `master.png` ci copiava sopra l'esempio. Ora tiene quella gia
+  installata.
+- `install.sh` chiamava `say`, mai definita: con `set -e` l'installazione si
+  interrompeva se c'era la vecchia installazione teams-tone.
+
 ## 1.0.1
 
 - `griglia()` leggeva la tinta dal nome del file spezzandolo sui trattini e

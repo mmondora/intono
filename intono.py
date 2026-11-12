@@ -21,7 +21,7 @@ Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
 
 from __future__ import annotations
 
-VERSIONE = "1.0.1"   # unica fonte: install.sh la legge da qui
+VERSIONE = "1.0.3"   # unica fonte: install.sh la legge da qui
 NOME = "intono"      # usato nei nomi dei file generati
 
 import argparse
@@ -344,7 +344,7 @@ def scatta(warmup: int = 14) -> np.ndarray:
     tmp = Path(tempfile.mkdtemp()) / "shot.jpg"
     for cmd in (["imagesnap", "-w", "1", str(tmp)],
                 ["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "avfoundation",
-                 "-framerate", "30", "-i", "0", "-frames:v", "1", "-y", str(tmp)]):
+                 "-framerate", "30", "-pixel_format", "nv12", "-i", "0", "-frames:v", "1", "-y", str(tmp)]):
         if shutil.which(cmd[0]) is None:
             continue
         try:
@@ -362,15 +362,38 @@ def scatta(warmup: int = 14) -> np.ndarray:
     )
 
 
+def _rilevatore_volti():
+    """Classificatore Haar dei volti, oppure (None, motivo).
+
+    OpenCV 5 ha tolto CascadeClassifier dal pacchetto opencv-python. Prima
+    l'errore finiva in un except muto e il tool diceva "volto non trovato" a
+    ogni scatto, misurando una fascia fissa dell'inquadratura: tavolo, pelle,
+    sfondo. Il colore della maglietta cambiava a ogni lancio.
+    """
+    try:
+        import cv2
+    except ImportError:
+        return None, "opencv non installato"
+    if not hasattr(cv2, "CascadeClassifier"):
+        return None, (f"opencv {cv2.__version__} non ha il rilevatore di volti: "
+                      "reinstalla con  bash install.sh  (porta opencv < 5)")
+    casc = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    if casc.empty():
+        return None, "modello dei volti di opencv non caricabile"
+    return casc, ""
+
+
 def zona_busto(rgb: np.ndarray) -> tuple[np.ndarray, str]:
     h, w = rgb.shape[:2]
+    casc, motivo = _rilevatore_volti()
+    if casc is None:
+        print(f"  ATTENZIONE: {motivo}", file=sys.stderr)
     try:
         import cv2
 
-        casc = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-        facce = casc.detectMultiScale(cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY),
-                                      1.1, 5, minSize=(60, 60))
+        facce = () if casc is None else casc.detectMultiScale(
+            cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), 1.1, 5, minSize=(60, 60))
         if len(facce):
             fx, fy, fw, fh = max(facce, key=lambda f: f[2] * f[3])
             cx = fx + fw // 2
@@ -1123,6 +1146,16 @@ def main() -> None:
         out = pagina(dest_pag, Path.home() / ".cache/intono/sfondi.html",
                      pieno=args.pieno)
         print(f"\n  pagina: {out}\n")
+        if not args.no_open:
+            apri(out)
+        return
+
+    if args.sheet:
+        sfondi = leggi_gallery(teams_dest())
+        if not sfondi:
+            raise SystemExit("\nNessuno sfondo nella gallery di Teams.\n")
+        out = tavola(sfondi, Path.home() / ".cache/intono/tavola.png")
+        print(f"\n  tavola di {len(sfondi)} sfondi: {out}\n")
         if not args.no_open:
             apri(out)
         return
