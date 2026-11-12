@@ -21,7 +21,7 @@ Dipendenze: numpy, pillow, opencv-python. Tutto in locale, niente rete.
 
 from __future__ import annotations
 
-VERSIONE = "1.0.3"   # unica fonte: install.sh la legge da qui
+VERSIONE = "1.0.4"   # unica fonte: install.sh la legge da qui
 NOME = "intono"      # usato nei nomi dei file generati
 
 import argparse
@@ -321,23 +321,29 @@ def leggi_gallery(dest: Path, verbose: bool = True) -> list[dict]:
 # cattura webcam
 # --------------------------------------------------------------------------- #
 
-def scatta(warmup: int = 14) -> np.ndarray:
+def scatta(warmup: int = 14, tieni: int = 8) -> list[np.ndarray]:
+    """Gli ultimi `tieni` frame RGB del riscaldamento, non solo l'ultimo.
+
+    Il rilevatore Haar perde il volto in un frame su due o tre: guardando un
+    frame solo, quando il volto vero mancava vinceva un falso positivo dello
+    sfondo e la maglietta veniva misurata nel posto sbagliato.
+    """
     try:
         import cv2
 
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             raise RuntimeError("webcam non apribile")
-        frame = None
+        frames: list[np.ndarray] = []
         for _ in range(warmup):          # l'esposizione ha bisogno di frame
             ok, f = cap.read()
             if ok:
-                frame = f
+                frames = (frames + [f[:, :, ::-1].copy()])[-tieni:]
             time.sleep(0.03)
         cap.release()
-        if frame is None:
+        if not frames:
             raise RuntimeError("nessun frame letto")
-        return frame[:, :, ::-1].copy()
+        return frames
     except Exception as exc:
         print(f"  (opencv non utilizzabile: {exc})", file=sys.stderr)
 
@@ -350,7 +356,7 @@ def scatta(warmup: int = 14) -> np.ndarray:
         try:
             subprocess.run(cmd, check=True, timeout=25)
             if tmp.is_file() and tmp.stat().st_size:
-                return np.asarray(Image.open(tmp).convert("RGB"))
+                return [np.asarray(Image.open(tmp).convert("RGB"))]
         except Exception:
             continue
 
@@ -384,27 +390,66 @@ def _rilevatore_volti():
     return casc, ""
 
 
-def zona_busto(rgb: np.ndarray) -> tuple[np.ndarray, str]:
+def _busto(h: int, w: int, faccia) -> tuple[int, int, int, int] | None:
+    """Rettangolo della maglietta sotto un volto, o None se e fuori quadro.
+
+    Il busto parte a 1.45 altezze di volto sotto la fronte, per saltare collo
+    e mento. Ma vicino alla camera il volto e alto mezzo fotogramma e quel
+    punto cade fuori dall'immagine: prima il volto veniva scartato e si
+    diceva "volto non trovato". Ora, se sotto non resta abbastanza, si parte
+    subito sotto il mento.
+    """
+    fx, fy, fw, fh = (int(v) for v in faccia)
+    cx = fx + fw // 2
+    x0, x1 = max(0, cx - int(0.9 * fw)), min(w, cx + int(0.9 * fw))
+    minimo = max(20, int(0.06 * h))
+    for k in (1.45, 1.15):
+        y0 = fy + int(k * fh)
+        y1 = min(h, fy + int(3.3 * fh))
+        if y1 - y0 >= minimo and x1 - x0 > 20:
+            return x0, y0, x1, y1
+    return None
+
+
+def zona_busto(frames) -> tuple[np.ndarray, str]:
+    """Zona della maglietta: sotto il volto piu grande visto nei frame."""
+    if isinstance(frames, np.ndarray):
+        frames = [frames]
+    rgb = frames[-1]
     h, w = rgb.shape[:2]
     casc, motivo = _rilevatore_volti()
     if casc is None:
         print(f"  ATTENZIONE: {motivo}", file=sys.stderr)
-    try:
-        import cv2
+    vicino = False
+    if casc is not None:
+        try:
+            import cv2
 
-        facce = () if casc is None else casc.detectMultiScale(
-            cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), 1.1, 5, minSize=(60, 60))
-        if len(facce):
-            fx, fy, fw, fh = max(facce, key=lambda f: f[2] * f[3])
-            cx = fx + fw // 2
-            x0, x1 = max(0, cx - int(0.9 * fw)), min(w, cx + int(0.9 * fw))
-            y0, y1 = min(h - 1, fy + int(1.45 * fh)), min(h, fy + int(3.3 * fh))
-            if y1 - y0 > 20 and x1 - x0 > 20:
-                return rgb[y0:y1, x0:x1], "volto trovato, guardo il busto sotto"
-    except Exception:
-        pass
-    return (rgb[int(0.58 * h):int(0.95 * h), int(0.28 * w):int(0.72 * w)],
-            "volto non trovato, guardo la fascia bassa centrale")
+            migliore = None              # (area, frame, faccia)
+            for fr in frames:
+                fh_, fw_ = fr.shape[:2]
+                scala = 2 if fw_ >= 1280 else 1   # a mezza risoluzione: 4x piu veloce
+                g = cv2.cvtColor(fr, cv2.COLOR_RGB2GRAY)
+                if scala > 1:
+                    g = cv2.resize(g, (fw_ // scala, fh_ // scala))
+                lato = max(30, int(0.08 * min(g.shape)))
+                for f in casc.detectMultiScale(g, 1.1, 5, minSize=(lato, lato)):
+                    f = [int(v) * scala for v in f]
+                    if migliore is None or f[2] * f[3] > migliore[0]:
+                        migliore = (f[2] * f[3], fr, f)
+            if migliore is not None:
+                _, fr, f = migliore
+                r = _busto(fr.shape[0], fr.shape[1], f)
+                if r is not None:
+                    x0, y0, x1, y1 = r
+                    return fr[y0:y1, x0:x1], "volto trovato, guardo il busto sotto"
+                vicino = True
+        except Exception as exc:
+            print(f"  (rilevamento volto fallito: {exc})", file=sys.stderr)
+    nota = ("volto troppo vicino, la maglietta e fuori quadro: "
+            "guardo la fascia bassa centrale" if vicino
+            else "volto non trovato, guardo la fascia bassa centrale")
+    return rgb[int(0.58 * h):int(0.95 * h), int(0.28 * w):int(0.72 * w)], nota
 
 
 # --------------------------------------------------------------------------- #
@@ -1170,9 +1215,9 @@ def main() -> None:
         print("  Riavvia Teams se non lo vedi.\n")
         return
 
-    frame = (np.asarray(Image.open(args.image).convert("RGB"))
-             if args.image else scatta())
-    roi, come = zona_busto(frame)
+    frames = ([np.asarray(Image.open(args.image).convert("RGB"))]
+              if args.image else scatta())
+    roi, come = zona_busto(frames)
     mag = misura(roi)
 
     print(f"\n  {come}")

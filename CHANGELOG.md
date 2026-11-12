@@ -7,6 +7,21 @@ copia stai eseguendo.
 
 Da alzare a ogni cambiamento che tocchi il comportamento.
 
+## 1.0.4
+
+- **"Volto non trovato" anche con il volto in quadro.** Due cause, viste con
+  una diagnostica sulla webcam reale:
+  - vicino alla camera il volto e alto mezzo fotogramma, e il busto (1.45
+    altezze di volto sotto la fronte) cadeva fuori dall'immagine: il volto
+    veniva scartato. Ora, se sotto non resta abbastanza, si misura subito
+    sotto il mento; se nemmeno li c'e spazio, il tool lo dice.
+  - il rilevatore perde il volto in un frame su due o tre, e veniva guardato
+    solo l'ultimo: quando mancava vinceva un falso positivo dello sfondo.
+    Ora si cerca in tutti gli ultimi 8 frame del riscaldamento e vince il
+    volto piu grande.
+- `tests/test_volto.py`: volto vicino, volto intermittente con falso
+  positivo fisso, nessun volto.
+
 ## 1.0.3
 
 - **Il volto non veniva mai trovato.** `install.sh` installava `opencv-python`
